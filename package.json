@@ -1,7 +1,7 @@
 {
   "name": "@jaseeey/request-manager",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A library to prevent multiple API requests when called simultaneously",
   "main": "request-manager.js",
   "license": "MIT",
