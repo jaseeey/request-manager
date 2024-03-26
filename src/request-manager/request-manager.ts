@@ -1,3 +1,12 @@
+import { AxiosInstance, AxiosRequestConfig, AxiosResponse, Method } from 'axios';
+
+type RequestKey = string;
+
+interface RequestPromise<T = any> {
+    original: Promise<AxiosResponse<T, any>>;
+    processed: Promise<AxiosResponse<T, any> | void>;
+}
+
 /**
  * RequestManager
  *
@@ -5,41 +14,38 @@
  * concurrently. When a request to a specific URL and method is in progress, subsequent requests to the same URL and
  * method will return the same promise, preventing duplicate requests.
  */
-class RequestManager {
+class RequestManager<T = any> {
 
     /**
      * A Map to store active requests, with each key being a combination of URL and HTTP method and its corresponding
      * value being the Promise of the ongoing HTTP request.
-     *
-     * @type {Map<string, Promise>}
      */
-    activeRequests = new Map();
+    activeRequests: Map<RequestKey, RequestPromise<T>> = new Map();
 
     /**
      * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration. It
      * de-duplicates requests to the same URL with the same method by returning a previously stored promise if available.
      * Upon completion of the request, it optionally invokes an onSuccess callback if the request is successful, or an
      * onFailure callback if the request fails.
-     *
-     * @param {AxiosInstance} client
-     * @param {string} method
-     * @param {string} url
-     * @param {Object|null} [data=null]
-     * @param {Object|null} [config=null]
-     * @param {Function|null} [onSuccess=null]
-     * @param {Function|null} [onError=null]
-     * @returns {Promise}
      */
-    async call(client, method, url, data = null, config = null, onSuccess = null, onError = null) {
+    async call(
+        client: AxiosInstance,
+        method: Method,
+        url: string,
+        data: any = {},
+        config: AxiosRequestConfig | null = {},
+        onSuccess?: ((result: AxiosResponse) => void) | null,
+        onError?: ((error: any) => void) | null
+    ): Promise<AxiosResponse | void> {
         data ??= {};
         config ??= {};
         const key = `${method.toLowerCase()}:${url}`;
         if (this.activeRequests.has(key)) {
-            return this.activeRequests.get(key).processed;
+            return this.activeRequests.get(key)!.processed;
         }
-        const processRequest = async (responsePromise) => {
+        const processRequest = async (responsePromise: Promise<AxiosResponse>): Promise<AxiosResponse | void> => {
             try {
-                const requestResult = await responsePromise;
+                const requestResult: AxiosResponse = await responsePromise;
                 const callbackResult = onSuccess && typeof onSuccess === 'function'
                     ? onSuccess(requestResult)
                     : undefined;
@@ -55,10 +61,10 @@ class RequestManager {
                 throw err;
             }
         };
-        const requestPromise = client.request({ ...config, method, url, data }).finally(() => {
+        const requestPromise = client.request<T>({ ...config, method, url, data }).finally(() => {
             this.activeRequests.delete(key);
         });
-        const processedPromise = processRequest(requestPromise);
+        const processedPromise: Promise<AxiosResponse | void> = processRequest(requestPromise);
         this.activeRequests.set(key, { original: requestPromise, processed: processedPromise });
         return processedPromise;
     }
