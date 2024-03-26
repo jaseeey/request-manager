@@ -1,9 +1,10 @@
-import RequestManager from '../request-manager.js';
+import { RequestManager } from '../src/request-manager';
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { AxiosInstance, AxiosRequestConfig, AxiosResponse, Method } from "axios";
 
 describe('RequestManager', () => {
 
-    let mockClient;
+    let mockClient: jest.Mocked<AxiosInstance>;
 
     const mockURL1 = 'https://example.com';
     const mockURL2 = 'https://example2.com';
@@ -16,13 +17,14 @@ describe('RequestManager', () => {
             [ mockURL2, mockResponse2 ]
         ]);
         mockClient = {
-            request: jest.fn().mockImplementation(({ url }) => {
-                if (mockRequests.has(url)) {
+            request: jest.fn((config: AxiosRequestConfig) => {
+                const url = config.url;
+                if (url && mockRequests.has(url)) {
                     return Promise.resolve(mockRequests.get(url));
                 }
                 return Promise.reject(new Error('Mock URL not registered'));
-            })
-        };
+            }) as jest.MockedFunction<(config: AxiosRequestConfig) => Promise<AxiosResponse>>,
+        } as jest.Mocked<AxiosInstance>;
     });
 
     afterEach(() => {
@@ -87,8 +89,8 @@ describe('RequestManager', () => {
 
     test('handles requests with case-insensitive method', async () => {
         const [ firstResponse, secondResponse ] = await Promise.all([
-            RequestManager.call(mockClient, 'gET', mockURL1),
-            RequestManager.call(mockClient, 'gEt', mockURL1)
+            RequestManager.call(mockClient, <Method>'gET', mockURL1),
+            RequestManager.call(mockClient, <Method>'gEt', mockURL1)
         ])
         expect(firstResponse).toBe(mockResponse1);
         expect(secondResponse).toBe(secondResponse);

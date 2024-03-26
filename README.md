@@ -1,8 +1,6 @@
 # RequestManager
 
-## Overview
-
-RequestManager is a JavaScript library designed to manage and regulate HTTP requests efficiently. It ensures that multiple requests to the same URL with the same method are not made concurrently, thus preventing duplicate requests. When a request to a specific URL and method is in progress, subsequent requests to the same URL and method will return the same promise.
+RequestManager is a TypeScript-based library designed to manage and regulate HTTP requests efficiently. It ensures that multiple requests to the same URL with the same method are not made concurrently, thus preventing duplicate requests. When a request to a specific URL and method is in progress, subsequent requests to the same URL and method will return the same promise.
 
 ## Background and Scope
 
@@ -17,8 +15,17 @@ Should you wish to extend the behaviour, or modify it for your own purposes, the
 ## Features
 
 - Prevents duplicate simultaneous requests to the same URL and method.
-- Supports optional onSuccess and onError callbacks for regulated response handling.
-- Easy integration with any project that uses HTTP requests via Axios.
+- Supports TypeScript for improved type safety and developer experience.
+- Allows for optional onSuccess and onError callbacks to handle responses.
+- Generates both CommonJS (CJS) and ECMAScript Module (ESM) distributions for broad compatibility.
+
+## Installation
+
+To install RequestManager, use the following npm command:
+
+```bash
+npm install @jaseeey/request-manager
+```
 
 ## Usage
 
@@ -27,15 +34,15 @@ Here's a basic example of how to use the RequestManager library:
 ### With Callbacks
 
 ```javascript
-import RequestManager from '@jaseeey/request-manager';
+import { RequestManager } from '@jaseeey/request-manager';
 
 const client = axios.create();
 const url = 'https://example.com';
 const method = 'GET';
 
-RequestManager.call(client, method, url).then(res => {
+RequestManager.call(client, method, url, null, null, res => {
     // Handle your response here, any processing will only be run once.
-}).catch(err => {
+}, err => {
     // Handle your error here
 });
 ```
@@ -43,7 +50,7 @@ RequestManager.call(client, method, url).then(res => {
 ### Without Callbacks
 
 ```javascript
-import RequestManager from '@jaseeey/request-manager';
+import { RequestManager } from '@jaseeey/request-manager';
 
 const client = axios.create();
 const url = 'https://example.com';
