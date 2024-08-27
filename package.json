@@ -1,6 +1,6 @@
 {
     "name": "@jaseeey/request-manager",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "description": "A library to prevent multiple API requests when called simultaneously",
     "license": "MIT",
     "author": "Jason Ilicic <me@jasey.io>",
