@@ -22,7 +22,7 @@
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
     "dependencies": {
-        "axios": "^1.7.8"
+        "axios": "^1.11.0"
     },
     "devDependencies": {
         "@jest/globals": "^29.7.0",
@@ -40,6 +40,10 @@
         ".": {
             "require": "./dist/cjs/index.js",
             "import": "./dist/esm/index.js"
+        },
+        "./request-manager": {
+            "require": "./dist/cjs/request-manager.js",
+            "import": "./dist/esm/request-manager.js"
         }
     }
 }
