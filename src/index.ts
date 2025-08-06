@@ -1,3 +1,1 @@
-import RequestManager from './request-manager/request-manager';
-
-export { RequestManager };
+export { RequestManager } from './request-manager/index.js';

@@ -40,7 +40,7 @@ describe('RequestManager', () => {
         expect(mockClient.request).toHaveBeenCalledTimes(1);
         expect(firstResponse).toBe(secondResponse);
         expect(firstResponse).toBe(thirdResponse);
-        expect(RequestManager.activeRequests.has(`post:${ mockURL1 }`)).toBeFalsy();
+        expect(RequestManager.activeRequests.has(`get:${ mockURL1 }`)).toBeFalsy();
     });
 
     test('handles different requests independently', async () => {
