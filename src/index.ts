@@ -1,1 +1,1 @@
-export { RequestManager } from './request-manager';
+export { RequestManager } from './request-manager/index.js';

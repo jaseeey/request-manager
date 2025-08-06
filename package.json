@@ -42,8 +42,8 @@
             "import": "./dist/esm/index.js"
         },
         "./request-manager": {
-            "require": "./dist/cjs/request-manager.js",
-            "import": "./dist/esm/request-manager.js"
+            "require": "./dist/cjs/request-manager/index.js",
+            "import": "./dist/esm/request-manager/index.js"
         }
     }
 }
