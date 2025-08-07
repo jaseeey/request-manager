@@ -70,4 +70,9 @@ class RequestManager<T = any> {
     }
 }
 
-export default new RequestManager();
+// Create default instance
+const requestManager = new RequestManager();
+
+// Export both the class and the default instance
+export { RequestManager };
+export default requestManager;
