@@ -16,8 +16,8 @@
         "dist"
     ],
     "scripts": {
-        "build:esm": "tsc -p tsconfig.esm.json",
-        "build:cjs": "tsc -p tsconfig.cjs.json",
+        "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
+        "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
         "build": "npm run build:esm && npm run build:cjs",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
@@ -38,10 +38,12 @@
     "types": "./dist/esm/index.d.ts",
     "exports": {
         ".": {
+            "types": "./dist/esm/index.d.ts",
             "require": "./dist/cjs/index.js",
             "import": "./dist/esm/index.js"
         },
         "./request-manager": {
+            "types": "./dist/esm/request-manager/index.d.ts",
             "require": "./dist/cjs/request-manager/index.js",
             "import": "./dist/esm/request-manager/index.js"
         }
