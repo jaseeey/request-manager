@@ -1,6 +1,6 @@
-import { RequestManager } from '../src/request-manager';
+import requestManager, { RequestManager } from '../src/request-manager';
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { AxiosInstance, AxiosRequestConfig, AxiosResponse, Method } from "axios";
+import { AxiosInstance, AxiosRequestConfig, AxiosResponse, Method } from 'axios';
 
 describe('RequestManager', () => {
 
@@ -28,27 +28,27 @@ describe('RequestManager', () => {
     });
 
     afterEach(() => {
-        RequestManager.activeRequests.clear();
+        requestManager.activeRequests.clear();
     });
 
     test('prevents duplicate simultaneous requests', async () => {
         const [ firstResponse, secondResponse, thirdResponse ] = await Promise.all([
-            RequestManager.call(mockClient, 'GET', mockURL1),
-            RequestManager.call(mockClient, 'GET', mockURL1),
-            RequestManager.call(mockClient, 'GET', mockURL1)
+            requestManager.call(mockClient, 'GET', mockURL1),
+            requestManager.call(mockClient, 'GET', mockURL1),
+            requestManager.call(mockClient, 'GET', mockURL1)
         ]);
         expect(mockClient.request).toHaveBeenCalledTimes(1);
         expect(firstResponse).toBe(secondResponse);
         expect(firstResponse).toBe(thirdResponse);
-        expect(RequestManager.activeRequests.has(`get:${ mockURL1 }`)).toBeFalsy();
+        expect(requestManager.activeRequests.has(`get:${ mockURL1 }`)).toBeFalsy();
     });
 
     test('handles different requests independently', async () => {
         const [ firstResponse, secondResponse, thirdResponse ] = await Promise.all([
-            RequestManager.call(mockClient, 'GET', mockURL1),
-            RequestManager.call(mockClient, 'GET', mockURL2),
-            RequestManager.call(mockClient, 'GET', mockURL2)
-        ])
+            requestManager.call(mockClient, 'GET', mockURL1),
+            requestManager.call(mockClient, 'GET', mockURL2),
+            requestManager.call(mockClient, 'GET', mockURL2)
+        ]);
         expect(firstResponse).toBe(mockResponse1);
         expect(secondResponse).toBe(mockResponse2);
         expect(secondResponse).toBe(thirdResponse);
@@ -57,7 +57,7 @@ describe('RequestManager', () => {
 
     test('calls onSuccess callback on successful request', async () => {
         const onSuccessCb = jest.fn();
-        await RequestManager.call(mockClient, 'GET', mockURL1, null, null, onSuccessCb);
+        await requestManager.call(mockClient, 'GET', mockURL1, null, null, onSuccessCb);
         expect(onSuccessCb).toHaveBeenCalledWith(mockResponse1);
     });
 
@@ -65,33 +65,33 @@ describe('RequestManager', () => {
         const error = new Error('Request failed');
         mockClient.request.mockRejectedValueOnce(error);
         const onErrorCb = jest.fn();
-        await RequestManager.call(mockClient, 'GET', mockURL1, null, null, null, onErrorCb);
+        await requestManager.call(mockClient, 'GET', mockURL1, null, null, null, onErrorCb);
         expect(onErrorCb).toHaveBeenCalledWith(error);
     });
 
     test('returns the response when no callbacks are provided', async () => {
-        const result = await RequestManager.call(mockClient, 'GET', mockURL1);
+        const result = await requestManager.call(mockClient, 'GET', mockURL1);
         expect(result).toBe(mockResponse1);
     });
 
     test('throws an error when the request fails and no onError callback is provided', async () => {
         const error = new Error('Request failed');
         mockClient.request.mockRejectedValueOnce(error);
-        await expect(RequestManager.call(mockClient, 'GET', mockURL1)).rejects.toThrow(error);
+        await expect(requestManager.call(mockClient, 'GET', mockURL1)).rejects.toThrow(error);
     });
 
     test('allows a new request after the previous one completes', async () => {
-        await RequestManager.call(mockClient, 'GET', mockURL1);
+        await requestManager.call(mockClient, 'GET', mockURL1);
         mockClient.request.mockClear();
-        await RequestManager.call(mockClient, 'GET', mockURL1);
+        await requestManager.call(mockClient, 'GET', mockURL1);
         expect(mockClient.request).toHaveBeenCalledTimes(1);
     });
 
     test('handles requests with case-insensitive method', async () => {
         const [ firstResponse, secondResponse ] = await Promise.all([
-            RequestManager.call(mockClient, <Method>'gET', mockURL1),
-            RequestManager.call(mockClient, <Method>'gEt', mockURL1)
-        ])
+            requestManager.call(mockClient, <Method>'gET', mockURL1),
+            requestManager.call(mockClient, <Method>'gEt', mockURL1)
+        ]);
         expect(firstResponse).toBe(mockResponse1);
         expect(secondResponse).toBe(secondResponse);
         expect(mockClient.request).toHaveBeenCalledTimes(1);
