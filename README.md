@@ -14,7 +14,7 @@ Should you wish to extend the behaviour, or modify it for your own purposes, the
 
 ## Features
 
-- Prevents duplicate simultaneous requests to the same URL and method.
+- Prevents duplicate simultaneous requests to the same client instance, URL, and method.
 - Supports TypeScript for improved type safety and developer experience.
 - Allows for optional onSuccess and onError callbacks to handle responses.
 - Generates both CommonJS (CJS) and ECMAScript Module (ESM) distributions for broad compatibility.
@@ -31,43 +31,63 @@ npm install @jaseeey/request-manager
 
 Here's a basic example of how to use the RequestManager library:
 
-### With Callbacks
+### Recommended: Default Instance
 
 ```javascript
-import { RequestManager } from '@jaseeey/request-manager';
+import requestManager from '@jaseeey/request-manager';
 
 const client = axios.create();
 const url = 'https://example.com';
 const method = 'GET';
 
-RequestManager.call(client, method, url, null, null, res => {
-    // Handle your response here, any processing will only be run once.
-}, err => {
-    // Handle your error here
-});
+const response = await requestManager.call(client, method, url);
 ```
 
-### Without Callbacks
+### With Callbacks and Transforming Success Result
+
+```javascript
+import requestManager from '@jaseeey/request-manager';
+
+const client = axios.create();
+const url = 'https://example.com';
+
+const result = await requestManager.call(
+    client,
+    'GET',
+    url,
+    {},
+    {},
+    res => res.data, // Returning a value changes the resolved result
+    err => {
+        // Handle your error here
+    }
+);
+```
+
+### Creating Isolated Managers
 
 ```javascript
 import { RequestManager } from '@jaseeey/request-manager';
 
 const client = axios.create();
-const url = 'https://example.com';
-const method = 'GET';
+const scopedRequestManager = new RequestManager();
 
-try {
-    const response = await RequestManager.call(client, method, url);
-    // Handle your response here, any processing will be run multiple times upon multiple requests.
-}
-catch (err) {
-    // Handle your error here
-}
+const response = await scopedRequestManager.call(client, 'GET', 'https://example.com');
 ```
+
+### Legacy Static API (Backward Compatibility)
+
+```javascript
+import { RequestManager } from '@jaseeey/request-manager';
+
+const response = await RequestManager.call(client, 'GET', 'https://example.com');
+```
+
+`RequestManager.call(...)` is supported for backward compatibility, but the default instance API is recommended.
 
 ## API Reference
 
-### `call(client, method, url, data, config, onSuccess, onError)`
+### `requestManager.call(client, method, url, data, config, onSuccess, onError)`
 
 - `client`: The HTTP client instance used for making requests.
 - `method`: The HTTP method (e.g., 'GET', 'POST').
@@ -76,6 +96,8 @@ catch (err) {
 - `config` (optional): The configuration options for the request.
 - `onSuccess` (optional): A callback function that is called when the request is successful. Returning a non-`undefined` value from this callback changes the resolved value of the `call()` promise.
 - `onError` (optional): A callback function that is called when the request fails.
+
+`RequestManager.call(...)` is also available as a static compatibility API and delegates to the shared default instance.
 
 ## Known Limitations
 
