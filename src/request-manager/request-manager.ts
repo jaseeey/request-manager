@@ -16,7 +16,6 @@ interface RequestPromise {
  * method will return the same promise, preventing duplicate requests.
  */
 export class RequestManager<T = any> {
-
     /**
      * A Map to store active requests, with each key being a combination of client instance, URL, and HTTP method and
      * its corresponding value being the Promise of the ongoing HTTP request.
@@ -26,10 +25,35 @@ export class RequestManager<T = any> {
     private nextClientId = 1;
 
     /**
-     * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration. It
-     * de-duplicates requests to the same URL with the same method for the same client instance by returning a previously
-     * stored promise if available. Upon completion of the request, it optionally invokes an onSuccess callback if the
-     * request is successful, or an onFailure callback if the request fails.
+     * Backward-compatible static API that delegates to the shared singleton instance.
+     *
+     * @deprecated Prefer the default exported instance (`requestManager.call(...)`).
+     */
+    static call<TResponse = any, TSuccess = never>(
+        client: AxiosInstance,
+        method: Method,
+        url: string,
+        data: any = {},
+        config: AxiosRequestConfig | null = {},
+        onSuccess?: ((result: AxiosResponse<TResponse>) => MaybePromise<TSuccess | undefined>) | null,
+        onError?: ((error: unknown) => void) | null
+    ): Promise<AxiosResponse<TResponse> | TSuccess | void> {
+        return requestManager.call(client, method, url, data, config, onSuccess, onError);
+    }
+
+    /**
+     * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration.
+     *
+     * Requests are de-duplicated only when they target the same client instance, method, and URL.
+     * If `onSuccess` returns a non-`undefined` value, that value becomes the resolved result.
+     *
+     * @param client Axios client used to execute the request.
+     * @param method HTTP method.
+     * @param url Target request URL.
+     * @param data Optional request payload.
+     * @param config Optional Axios request configuration.
+     * @param onSuccess Optional callback invoked on success. Returning a value overrides the resolved response.
+     * @param onError Optional callback invoked on error. If provided, the promise resolves to `void` after handling.
      */
     async call<TResponse = T, TSuccess = never>(
         client: AxiosInstance,
@@ -74,6 +98,9 @@ export class RequestManager<T = any> {
         return processedPromise;
     }
 
+    /**
+     * Creates a stable in-memory key for de-duplication within this manager instance.
+     */
     private buildRequestKey(client: AxiosInstance, method: Method, url: string): RequestKey {
         let clientId = this.clientIds.get(client);
         if (!clientId) {

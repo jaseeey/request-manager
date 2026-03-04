@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig, Method } from 'axios';
 import { afterEach, beforeEach, describe, expect, type MockInstance, test, vi } from 'vitest';
-import requestManager from '../src/request-manager';
+import requestManager, { RequestManager } from '../src/request-manager';
 
 describe('RequestManager', () => {
 
@@ -53,6 +53,16 @@ describe('RequestManager', () => {
         expect(firstResponse).toBe(secondResponse);
         expect(firstResponse).toBe(thirdResponse);
         expect(requestManager.activeRequests.size).toBe(0);
+    });
+
+    test('supports static RequestManager.call using singleton behavior', async () => {
+        const [ firstResponse, secondResponse ] = await Promise.all([
+            RequestManager.call(mockClient, 'GET', mockURL1),
+            requestManager.call(mockClient, 'GET', mockURL1)
+        ]);
+
+        expect(requestSpy).toHaveBeenCalledTimes(1);
+        expect(firstResponse).toBe(secondResponse);
     });
 
     test('handles different requests independently', async () => {
