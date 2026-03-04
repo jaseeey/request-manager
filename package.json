@@ -1,6 +1,6 @@
 {
     "name": "@jaseeey/request-manager",
-    "version": "2.0.3",
+    "version": "2.1.0",
     "description": "A library to prevent multiple API requests when called simultaneously",
     "license": "MIT",
     "author": "Jason Ilicic <me@jasey.io>",
@@ -16,32 +16,33 @@
         "dist"
     ],
     "scripts": {
-        "build:esm": "tsc -p tsconfig.esm.json",
-        "build:cjs": "tsc -p tsconfig.cjs.json",
+        "prebuild": "rm -rf dist",
+        "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
+        "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
         "build": "npm run build:esm && npm run build:cjs",
-        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+        "prepack": "npm run build",
+        "test": "vitest run --coverage"
     },
     "dependencies": {
-        "axios": "^1.11.0"
+        "axios": "^1.13.6"
     },
     "devDependencies": {
-        "@jest/globals": "^29.7.0",
-        "@types/axios": "^0.14.0",
-        "@types/jest": "^29.5.14",
+        "@vitest/coverage-v8": "^4.0.18",
         "braces": "^3.0.3",
-        "jest": "^29.7.0",
-        "ts-jest": "^29.2.5",
-        "typescript": "^5.7.2"
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.18"
     },
     "main": "./dist/cjs/index.js",
     "module": "./dist/esm/index.js",
     "types": "./dist/esm/index.d.ts",
     "exports": {
         ".": {
+            "types": "./dist/esm/index.d.ts",
             "require": "./dist/cjs/index.js",
             "import": "./dist/esm/index.js"
         },
         "./request-manager": {
+            "types": "./dist/esm/request-manager/index.d.ts",
             "require": "./dist/cjs/request-manager/index.js",
             "import": "./dist/esm/request-manager/index.js"
         }

@@ -74,7 +74,7 @@ catch (err) {
 - `url`: The URL to which the request is sent.
 - `data` (optional): The data to be sent as the request body.
 - `config` (optional): The configuration options for the request.
-- `onSuccess` (optional): A callback function that is called when the request is successful.
+- `onSuccess` (optional): A callback function that is called when the request is successful. Returning a non-`undefined` value from this callback changes the resolved value of the `call()` promise.
 - `onError` (optional): A callback function that is called when the request fails.
 
 ## Known Limitations
@@ -89,7 +89,7 @@ Given that only the first set of callbacks are executed, managing state updates 
 
 ### Request Differentiation
 
-The system identifies duplicate requests based solely on URL and method, potentially overlooking requests that differ in headers, query parameters, or POST bodies. Applications requiring differentiation based on these factors may need to extend the key generation logic within the RequestManager.
+The system identifies duplicate requests based on client instance, URL, and method, but still overlooks differences in headers, query parameters, or POST bodies for otherwise matching requests. Applications requiring differentiation based on those fields may need to extend the key generation logic within the RequestManager.
 
 ### Lifecycle Management
 
