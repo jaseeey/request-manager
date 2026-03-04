@@ -14,19 +14,21 @@ interface RequestPromise<T = any> {
  * concurrently. When a request to a specific URL and method is in progress, subsequent requests to the same URL and
  * method will return the same promise, preventing duplicate requests.
  */
-class RequestManager<T = any> {
+export class RequestManager<T = any> {
 
     /**
-     * A Map to store active requests, with each key being a combination of URL and HTTP method and its corresponding
-     * value being the Promise of the ongoing HTTP request.
+     * A Map to store active requests, with each key being a combination of client instance, URL, and HTTP method and
+     * its corresponding value being the Promise of the ongoing HTTP request.
      */
     activeRequests: Map<RequestKey, RequestPromise<T>> = new Map();
+    private clientIds: WeakMap<AxiosInstance, number> = new WeakMap();
+    private nextClientId = 1;
 
     /**
      * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration. It
-     * de-duplicates requests to the same URL with the same method by returning a previously stored promise if available.
-     * Upon completion of the request, it optionally invokes an onSuccess callback if the request is successful, or an
-     * onFailure callback if the request fails.
+     * de-duplicates requests to the same URL with the same method for the same client instance by returning a previously
+     * stored promise if available. Upon completion of the request, it optionally invokes an onSuccess callback if the
+     * request is successful, or an onFailure callback if the request fails.
      */
     async call(
         client: AxiosInstance,
@@ -39,7 +41,7 @@ class RequestManager<T = any> {
     ): Promise<AxiosResponse | void> {
         data ??= {};
         config ??= {};
-        const key = `${method.toLowerCase()}:${url}`;
+        const key = this.buildRequestKey(client, method, url);
         if (this.activeRequests.has(key)) {
             return this.activeRequests.get(key)!.processed;
         }
@@ -68,11 +70,17 @@ class RequestManager<T = any> {
         this.activeRequests.set(key, { original: requestPromise, processed: processedPromise });
         return processedPromise;
     }
+
+    private buildRequestKey(client: AxiosInstance, method: Method, url: string): RequestKey {
+        let clientId = this.clientIds.get(client);
+        if (!clientId) {
+            clientId = this.nextClientId++;
+            this.clientIds.set(client, clientId);
+        }
+        return `${clientId}:${method.toLowerCase()}:${url}`;
+    }
 }
 
-// Create default instance
 const requestManager = new RequestManager();
 
-// Export both the class and the default instance
-export { RequestManager };
 export default requestManager;

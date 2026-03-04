@@ -52,7 +52,7 @@ describe('RequestManager', () => {
         expect(requestSpy).toHaveBeenCalledTimes(1);
         expect(firstResponse).toBe(secondResponse);
         expect(firstResponse).toBe(thirdResponse);
-        expect(requestManager.activeRequests.has(`get:${ mockURL1 }`)).toBeFalsy();
+        expect(requestManager.activeRequests.size).toBe(0);
     });
 
     test('handles different requests independently', async () => {
@@ -65,6 +65,26 @@ describe('RequestManager', () => {
         expect(secondResponse).toBe(mockResponse2);
         expect(secondResponse).toBe(thirdResponse);
         expect(requestSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('does not deduplicate identical requests across different clients', async () => {
+        const secondClient = axios.create();
+        const secondResponse = createMockResponse('response-from-second-client');
+        const secondSpy = vi.spyOn(secondClient, 'request').mockImplementation(
+            <T = any, R = AxiosResponse<T>, D = any>(_config: AxiosRequestConfig<D>): Promise<R> => {
+                return Promise.resolve(secondResponse as unknown as R);
+            }
+        );
+
+        const [ firstResponse, secondClientResponse ] = await Promise.all([
+            requestManager.call(mockClient, 'GET', mockURL1),
+            requestManager.call(secondClient, 'GET', mockURL1)
+        ]);
+
+        expect(requestSpy).toHaveBeenCalledTimes(1);
+        expect(secondSpy).toHaveBeenCalledTimes(1);
+        expect(firstResponse).toBe(mockResponse1);
+        expect(secondClientResponse).toBe(secondResponse);
     });
 
     test('calls onSuccess callback on successful request', async () => {

@@ -89,7 +89,7 @@ Given that only the first set of callbacks are executed, managing state updates 
 
 ### Request Differentiation
 
-The system identifies duplicate requests based solely on URL and method, potentially overlooking requests that differ in headers, query parameters, or POST bodies. Applications requiring differentiation based on these factors may need to extend the key generation logic within the RequestManager.
+The system identifies duplicate requests based on client instance, URL, and method, but still overlooks differences in headers, query parameters, or POST bodies for otherwise matching requests. Applications requiring differentiation based on those fields may need to extend the key generation logic within the RequestManager.
 
 ### Lifecycle Management
 
