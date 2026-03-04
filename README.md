@@ -74,7 +74,7 @@ catch (err) {
 - `url`: The URL to which the request is sent.
 - `data` (optional): The data to be sent as the request body.
 - `config` (optional): The configuration options for the request.
-- `onSuccess` (optional): A callback function that is called when the request is successful.
+- `onSuccess` (optional): A callback function that is called when the request is successful. Returning a non-`undefined` value from this callback changes the resolved value of the `call()` promise.
 - `onError` (optional): A callback function that is called when the request fails.
 
 ## Known Limitations
