@@ -19,6 +19,7 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 - [Effective usage patterns](#effective-usage-patterns)
 - [TypeScript tips](#typescript-tips)
 - [CommonJS](#commonjs)
+- [FAQ](#faq)
 - [Known limitations](#known-limitations)
 - [Background and scope](#background-and-scope)
 - [Contributing](#contributing)
@@ -485,6 +486,47 @@ Package exports:
 - `require('@jaseeey/request-manager')` → CJS build
 - `import … from '@jaseeey/request-manager'` → ESM build
 - Types resolve from the ESM declaration entry
+
+---
+
+## FAQ
+
+### Does RequestManager cache responses?
+
+No. It only de-duplicates **in-flight** requests. After a call settles, the next `call()` with the same key performs a new network request. For caching, revalidation, and background refresh, use a data library (see [Related tools](#related-tools)) or your own cache.
+
+### Why did two different POST bodies share one request?
+
+The de-duplication key ignores `data`. Concurrent `POST`s to the same client, method, and URL string join the first request; later bodies are not sent separately. Use distinct URLs, separate manager instances, or call Axios directly when bodies must not merge. See [Avoid accidental de-duplication of different POST bodies](#3-avoid-accidental-de-duplication-of-different-post-bodies).
+
+### Why didn't `config.params` create separate keys?
+
+`config.params` is not part of the key. Encode distinguishing query data in the `url` string (for example `` `/items?id=${id}` ``), or the calls will join. See [Put distinguishing data in the URL string](#2-put-distinguishing-data-in-the-url-string).
+
+### Can I use `fetch` instead of Axios?
+
+Not with this package as-is. `call()` expects an Axios-like client with `request(config)`. You could wrap `fetch` behind a minimal `request()` adapter, but that is outside the supported surface.
+
+### What if `onSuccess` returns `undefined`?
+
+The promise still resolves to the full `AxiosResponse`. Only a **non-`undefined`** return value from `onSuccess` replaces the result.
+
+### How can I see what is in flight?
+
+Inspect `requestManager.activeRequests.size` (or the map itself) for debugging and tests. Treat key strings as internal; do not build application logic on the key format.
+
+### Should I migrate off `RequestManager.call`?
+
+Yes, when convenient. The static helper is deprecated and always uses the default shared instance:
+
+```typescript
+// Before
+await RequestManager.call(client, 'GET', '/users/me');
+
+// After
+import requestManager from '@jaseeey/request-manager';
+await requestManager.call(client, 'GET', '/users/me');
+```
 
 ---
 
