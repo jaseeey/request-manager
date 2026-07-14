@@ -73,14 +73,9 @@ export class RequestManager<T = any> {
         const processRequest = async (
             responsePromise: Promise<AxiosResponse<TResponse>>
         ): Promise<AxiosResponse<TResponse> | TSuccess | void> => {
+            let requestResult: AxiosResponse<TResponse>;
             try {
-                const requestResult: AxiosResponse<TResponse> = await responsePromise;
-                const callbackResult = onSuccess && typeof onSuccess === 'function'
-                    ? await onSuccess(requestResult)
-                    : undefined;
-                return callbackResult !== undefined
-                    ? callbackResult
-                    : requestResult;
+                requestResult = await responsePromise;
             }
             catch (err) {
                 if (onError && typeof onError === 'function') {
@@ -89,6 +84,13 @@ export class RequestManager<T = any> {
                 }
                 throw err;
             }
+            if (!(onSuccess && typeof onSuccess === 'function')) {
+                return requestResult;
+            }
+            const callbackResult = await onSuccess(requestResult);
+            return callbackResult !== undefined
+                ? callbackResult
+                : requestResult;
         };
         const requestPromise = client.request<TResponse>({ ...config, method, url, data }).finally(() => {
             this.activeRequests.delete(key);

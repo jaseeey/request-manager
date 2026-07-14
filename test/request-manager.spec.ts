@@ -327,6 +327,19 @@ describe('RequestManager', () => {
             expect(onErrorCb).toHaveBeenCalledWith(error);
         });
 
+        test('does not route onSuccess errors through onError', async () => {
+            const callbackError = new Error('onSuccess failed');
+            const onSuccessCb = vi.fn().mockImplementation(() => {
+                throw callbackError;
+            });
+            const onErrorCb = vi.fn();
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, {}, onSuccessCb, onErrorCb)
+            ).rejects.toThrow(callbackError);
+            expect(onSuccessCb).toHaveBeenCalledTimes(1);
+            expect(onErrorCb).not.toHaveBeenCalled();
+        });
+
         test('removes the request from activeRequests after success', async () => {
             expect(requestManager.activeRequests.size).toBe(0);
             const pending = requestManager.call(mockClient, 'GET', mockURL1);
