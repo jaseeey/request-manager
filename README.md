@@ -130,11 +130,13 @@ Each in-flight request is stored under a key built from:
 
 1. **Axios client instance** (identity, not config equality)
 2. **HTTP method** (compared case-insensitively, e.g. `GET` and `get` match)
-3. **URL string** (exact string match)
+3. **URL string** (exact string match of the `url` argument—not Axios's fully resolved URL)
 
 ```text
 key = `${clientId}:${method.toLowerCase()}:${url}`
 ```
+
+See also [`baseURL` is not part of the key](#baseurl-is-not-part-of-the-key).
 
 ### Lifecycle
 
@@ -463,6 +465,25 @@ De-duplication does not consider request bodies, headers, or `config.params`. De
 ### Exact URL string matching
 
 `/users` and `/users/` are different keys. Relative URLs are not normalised against `baseURL` for keying—the string you pass is the key segment.
+
+### `baseURL` is not part of the key
+
+Axios may resolve a relative `url` against the client's `baseURL` when sending the request, but RequestManager keys only on the **`url` argument string**.
+
+```typescript
+const client = axios.create({ baseURL: 'https://api.example.com' });
+
+// These share one in-flight request (same url string: '/users/me')
+await Promise.all([
+    requestManager.call(client, 'GET', '/users/me'),
+    requestManager.call(client, 'GET', '/users/me')
+]);
+
+// This is a different key (different url string), even if it hits the same origin
+await requestManager.call(client, 'GET', 'https://api.example.com/users/me');
+```
+
+Keep the `url` argument consistent across call sites (usually the same relative path) so de-duplication works as intended.
 
 ### Client identity, not configuration equality
 
