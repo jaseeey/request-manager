@@ -217,8 +217,17 @@ describe('RequestManager', () => {
             );
         });
 
-        test('coerces null data and config to empty objects', async () => {
+        test('coerces null and undefined data and config to empty objects', async () => {
             await requestManager.call(mockClient, 'GET', mockURL1, null, null);
+            expect(requestSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    method: 'GET',
+                    url: mockURL1,
+                    data: {}
+                })
+            );
+            requestSpy.mockClear();
+            await requestManager.call(mockClient, 'GET', mockURL1, undefined, undefined);
             expect(requestSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
                     method: 'GET',
