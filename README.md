@@ -176,6 +176,20 @@ const response = await requestManager.call(client, 'GET', url);
 updateUi(response.data);
 ```
 
+Joiners also share **promise identity**: concurrent callers for the same key receive the same `Promise` instance, not merely the same eventual value.
+
+```typescript
+const p1 = requestManager.call(client, 'GET', '/users/me');
+const p2 = requestManager.call(client, 'GET', '/users/me');
+console.log(p1 === p2); // true while the request is in flight
+```
+
+### Axios interceptors run once
+
+Request and response interceptors on the Axios client run for the **single** underlying `client.request(...)`. Joined callers do not re-enter interceptors.
+
+That is usually what you want for auth headers, logging, and token refresh: one network attempt, one interceptor chain, many awaiters.
+
 ---
 
 ## Choosing a manager instance
