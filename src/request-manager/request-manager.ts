@@ -79,7 +79,12 @@ export class RequestManager<T = any> {
             }
             catch (err) {
                 if (onError && typeof onError === 'function') {
-                    onError(err);
+                    try {
+                        onError(err);
+                    }
+                    catch {
+                        throw err;
+                    }
                     return;
                 }
                 throw err;

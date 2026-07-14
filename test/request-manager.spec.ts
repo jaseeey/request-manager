@@ -340,6 +340,18 @@ describe('RequestManager', () => {
             expect(onErrorCb).not.toHaveBeenCalled();
         });
 
+        test('preserves the original error when onError throws', async () => {
+            const networkError = new Error('network failed');
+            requestSpy.mockRejectedValueOnce(networkError);
+            const onErrorCb = vi.fn().mockImplementation(() => {
+                throw new Error('onError failed');
+            });
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, {}, null, onErrorCb)
+            ).rejects.toThrow(networkError);
+            expect(onErrorCb).toHaveBeenCalledWith(networkError);
+        });
+
         test('removes the request from activeRequests after success', async () => {
             expect(requestManager.activeRequests.size).toBe(0);
             const pending = requestManager.call(mockClient, 'GET', mockURL1);
