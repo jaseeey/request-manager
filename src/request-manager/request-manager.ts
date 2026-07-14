@@ -53,7 +53,7 @@ export class RequestManager<T = any> {
      * @param data Optional request payload.
      * @param config Optional Axios request configuration.
      * @param onSuccess Optional callback invoked on success. Returning a value overrides the resolved response.
-     * @param onError Optional callback invoked on error. If provided, the promise resolves to `void` after handling.
+     * @param onError Optional callback for request failures only. If it throws, the original request error is rethrown.
      */
     call<TResponse = T, TSuccess = never>(
         client: AxiosInstance,
