@@ -79,6 +79,34 @@ describe('RequestManager', () => {
             await expect(firstPromise).resolves.toBe(mockResponse1);
         });
 
+        test('stores hashed map keys with inspectable identity on active entries', async () => {
+            let resolveRequest!: (value: AxiosResponse<string>) => void;
+            requestSpy.mockImplementationOnce(
+                () => new Promise<AxiosResponse<string>>(resolve => {
+                    resolveRequest = resolve;
+                })
+            );
+            const pending = requestManager.call(
+                mockClient,
+                'GET',
+                mockURL1,
+                {},
+                { params: { sort: 'asc', id: 7 } }
+            );
+            expect(requestManager.activeRequests.size).toBe(1);
+            const [ hash, entry ] = [ ...requestManager.activeRequests.entries() ][0];
+            expect(hash).toMatch(/^[a-f0-9]{64}$/);
+            expect(entry.hash).toBe(hash);
+            expect(entry.identity.method).toBe('get');
+            expect(entry.identity.url).toBe(mockURL1);
+            expect(entry.identity.params).toEqual({ sort: 'asc', id: 7 });
+            expect(entry.identity.paramsSerialised).toContain('"id"');
+            expect(entry.original).toBeInstanceOf(Promise);
+            expect(entry.processed).toBe(pending);
+            resolveRequest(mockResponse1);
+            await pending;
+        });
+
         test('handles different URLs independently', async () => {
             const [ firstResponse, secondResponse, thirdResponse ] = await Promise.all([
                 requestManager.call(mockClient, 'GET', mockURL1),

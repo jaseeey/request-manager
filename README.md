@@ -151,10 +151,25 @@ Each in-flight request is stored under a key built from:
 4. **`config.params`** (deterministic serialisation; missing/`undefined`/empty params are equivalent)
 
 ```text
-key = `${clientId}:${method.toLowerCase()}:${url}:${stableParams}`
+identity = `${clientId}:${method.toLowerCase()}:${url}:${stableParams}`
+mapKey   = sha256Hex(identity)   // fixed-length hex; used as Map key only
 ```
 
 Object key order in `params` does not matter (`{ a: 1, b: 2 }` matches `{ b: 2, a: 1 }`). Nested plain objects and arrays are included. `URLSearchParams` is supported.
+
+The Map key is a **SHA-256 hash** so long URLs/params do not bloat the map. Full details stay on each entry:
+
+```typescript
+for (const [hash, entry] of requestManager.activeRequests) {
+    entry.hash;                    // same as Map key
+    entry.identity.method;         // e.g. 'get'
+    entry.identity.url;
+    entry.identity.params;         // as supplied (or null)
+    entry.identity.paramsSerialised;
+    entry.original;                // underlying Axios promise
+    entry.processed;               // shared caller promise
+}
+```
 
 See also [`baseURL` is not part of the key](#baseurl-is-not-part-of-the-key).
 
@@ -320,9 +335,11 @@ await RequestManager.call(client, 'GET', 'https://example.com/health');
 
 | Member | Description |
 |--------|-------------|
-| `activeRequests` | `Map` of in-flight entries. Public for inspection/testing. Keys are internal strings; prefer not to depend on key format in production code. |
+| `activeRequests` | `Map<hash, ActiveRequest>` of in-flight entries. Keys are SHA-256 digests; values include `identity`, `original`, and `processed`. Prefer not to depend on hash format in production code. |
 
-Clearing the map mid-flight is not recommended except in tests. If you clear an in-flight key, a later `call()` with the same client/method/URL will start a **new** HTTP request while the original promise may still settle independently.
+`ActiveRequest` keeps **backward-compatible** promise fields (`original`, `processed`) and adds `hash` + `identity` for inspection.
+
+Clearing the map mid-flight is not recommended except in tests. If you clear an in-flight key, a later `call()` with the same client/method/URL/params will start a **new** HTTP request while the original promise may still settle independently.
 
 ### Constructor
 
@@ -542,7 +559,7 @@ The promise still resolves to the full `AxiosResponse`. Only a **non-`undefined`
 
 ### How can I see what is in flight?
 
-Inspect `requestManager.activeRequests.size` (or the map itself) for debugging and tests. Treat key strings as internal; do not build application logic on the key format.
+Inspect `requestManager.activeRequests.size` or iterate values and read `entry.identity` for debugging and tests. Treat hash keys as opaque; use `identity` for human-readable details.
 
 ### Should I migrate off `RequestManager.call`?
 
