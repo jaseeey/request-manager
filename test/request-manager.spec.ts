@@ -385,6 +385,32 @@ describe('RequestManager', () => {
             expect(nestedResult).toBe(mockResponse2);
         });
 
+        test('rejects non-string or empty HTTP methods with a clear TypeError', async () => {
+            await expect(
+                requestManager.call(mockClient, undefined as unknown as Method, mockURL1)
+            ).rejects.toThrow(TypeError);
+            await expect(
+                requestManager.call(mockClient, null as unknown as Method, mockURL1)
+            ).rejects.toThrow(/non-empty HTTP method string/);
+            await expect(
+                requestManager.call(mockClient, '' as Method, mockURL1)
+            ).rejects.toThrow(/non-empty HTTP method string/);
+            await expect(
+                requestManager.call(mockClient, 123 as unknown as Method, mockURL1)
+            ).rejects.toThrow(/non-empty HTTP method string/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects non-string URLs with a clear TypeError', async () => {
+            await expect(
+                requestManager.call(mockClient, 'GET', undefined as unknown as string)
+            ).rejects.toThrow(/URL string/);
+            await expect(
+                requestManager.call(mockClient, 'GET', null as unknown as string)
+            ).rejects.toThrow(/URL string/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
         test('removes the request from activeRequests after success', async () => {
             expect(requestManager.activeRequests.size).toBe(0);
             const pending = requestManager.call(mockClient, 'GET', mockURL1);

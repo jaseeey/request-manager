@@ -64,6 +64,12 @@ export class RequestManager<T = any> {
         onSuccess?: ((result: AxiosResponse<TResponse>) => MaybePromise<TSuccess | undefined>) | null,
         onError?: ((error: unknown) => void) | null
     ): Promise<AxiosResponse<TResponse> | TSuccess | void> {
+        if (typeof method !== 'string' || method.length === 0) {
+            return Promise.reject(new TypeError('RequestManager.call requires a non-empty HTTP method string'));
+        }
+        if (typeof url !== 'string') {
+            return Promise.reject(new TypeError('RequestManager.call requires a URL string'));
+        }
         data ??= {};
         config ??= {};
         const key = this.buildRequestKey(client, method, url);
