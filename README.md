@@ -200,7 +200,9 @@ That is usually what you want for auth headers, logging, and token refresh: one 
 import requestManager from '@jaseeey/request-manager';
 ```
 
-Use this when you want app-wide de-duplication for a given Axios client and endpoint. This is the recommended default.
+Use this when you want app-wide de-duplication for a given Axios client and endpoint. This is the recommended default in browser single-page apps.
+
+The default export is a **module-level singleton**: one shared `RequestManager` for the entire JavaScript realm that loaded the module (typically one per browser tab, or one per Node process).
 
 ### Isolated managers
 
@@ -217,6 +219,30 @@ Use isolated managers when:
 
 - You need separate de-duplication domains (e.g. multi-tenant tabs, micro-frontends).
 - Tests should not share state with the default singleton (or clear `activeRequests` carefully).
+- You run **SSR or multi-request Node** code and must not share in-flight maps across concurrent HTTP requests or users.
+
+#### Server-side rendering and multi-request Node
+
+On the server, the default export can be shared across concurrent incoming requests in the same process. That may incorrectly join unrelated users' in-flight calls if they hit the same client/method/URL key.
+
+Prefer creating a manager (and often an Axios client) **per request** or per app context:
+
+```typescript
+import axios from 'axios';
+import { RequestManager } from '@jaseeey/request-manager';
+
+export function createRequestContext() {
+    const api = axios.create({ baseURL: process.env.API_URL });
+    const requests = new RequestManager();
+    return { api, requests };
+}
+
+// inside a single incoming request handler / RSC context
+const { api, requests } = createRequestContext();
+await requests.call(api, 'GET', '/users/me');
+```
+
+In the browser, the default singleton is usually correct because one tab is one user session.
 
 ### Legacy static API
 
@@ -513,7 +539,7 @@ Async work inside `onError` is not tracked by the returned promise.
 
 ### Default export is shared process-wide
 
-The default `requestManager` is a single module-level instance. Use `new RequestManager()` when you need isolation.
+The default `requestManager` is a single module-level instance for the whole realm. Use `new RequestManager()` when you need isolation—especially under SSR or multi-tenant Node servers (see [Server-side rendering and multi-request Node](#server-side-rendering-and-multi-request-node)).
 
 ---
 
