@@ -62,10 +62,10 @@ You can use both: a query library for cache and lifecycle, and RequestManager un
 ## Installation
 
 ```bash
-npm install @jaseeey/request-manager
+npm install @jaseeey/request-manager axios
 ```
 
-Peer-style dependency: you must have **Axios** available in your project. Install it if you do not already:
+**Axios is a peer dependency** (`axios >= 1`). The package does not bundle a client for you; you pass your own `AxiosInstance` into `call()`. Install Axios alongside this library if it is not already in your project:
 
 ```bash
 npm install axios
