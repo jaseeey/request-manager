@@ -1,36 +1,29 @@
 {
     "name": "@jaseeey/request-manager",
-    "version": "2.1.4",
-    "description": "A library to prevent multiple API requests when called simultaneously",
+    "version": "2.2.0",
+    "description": "De-duplicate concurrent Axios HTTP requests so independent callers share one in-flight promise and response",
+    "keywords": [
+        "axios",
+        "http",
+        "request",
+        "dedupe",
+        "de-duplicate",
+        "inflight",
+        "promise",
+        "typescript"
+    ],
     "license": "MIT",
     "author": "Jason Ilicic <me@jasey.io>",
+    "homepage": "https://github.com/jaseeey/request-manager#readme",
     "repository": {
         "type": "git",
-        "url": "git+ssh://git@github.com/jaseeey/request-manager.git"
+        "url": "git+https://github.com/jaseeey/request-manager.git"
     },
     "bugs": {
         "url": "https://github.com/jaseeey/request-manager/issues"
     },
-    "homepage": "https://github.com/jaseeey/request-manager#readme",
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "prebuild": "rm -rf dist",
-        "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
-        "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
-        "build": "npm run build:esm && npm run build:cjs",
-        "prepack": "npm run build",
-        "test": "vitest run --coverage"
-    },
-    "dependencies": {
-        "axios": "^1.16.0"
-    },
-    "devDependencies": {
-        "@vitest/coverage-v8": "^4.1.4",
-        "braces": "^3.0.3",
-        "typescript": "^5.9.3",
-        "vitest": "^4.1.4"
+    "engines": {
+        "node": ">=18"
     },
     "main": "./dist/cjs/index.js",
     "module": "./dist/esm/index.js",
@@ -46,5 +39,26 @@
             "require": "./dist/cjs/request-manager/index.js",
             "import": "./dist/esm/request-manager/index.js"
         }
+    },
+    "files": [
+        "dist"
+    ],
+    "sideEffects": false,
+    "scripts": {
+        "prebuild": "rm -rf dist",
+        "build": "npm run build:esm && npm run build:cjs",
+        "build:esm": "tsc -p tsconfig.esm.json && echo '{\"type\": \"module\"}' > dist/esm/package.json",
+        "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
+        "prepack": "npm run build",
+        "test": "vitest run --coverage"
+    },
+    "peerDependencies": {
+        "axios": ">=1"
+    },
+    "devDependencies": {
+        "@vitest/coverage-v8": "^4.1.10",
+        "axios": "^1.18.1",
+        "typescript": "^5.9.3",
+        "vitest": "^4.1.10"
     }
 }
