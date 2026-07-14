@@ -11,6 +11,7 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 ## Table of contents
 
 - [When to use it](#when-to-use-it)
+- [Related tools](#related-tools)
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [How de-duplication works](#how-de-duplication-works)
@@ -40,6 +41,21 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 - You need response **caching** after the request has finished (this library only de-duplicates **in-flight** requests).
 - You need keys based on **body, headers, or query objects** rather than the full URL string (see [Known limitations](#known-limitations)).
 - You need automatic retries, offline queues, or GraphQL batching.
+
+## Related tools
+
+Libraries such as **TanStack Query**, **SWR**, and **Vue Query** solve a broader problem: server-state caching, background revalidation, stale-while-revalidate UX, and often retries.
+
+RequestManager is narrower:
+
+| Concern | RequestManager | Query libraries (typical) |
+|---------|----------------|---------------------------|
+| Collapse concurrent identical in-flight HTTP calls | Yes | Sometimes, as part of a larger cache model |
+| Keep a cache after the request finishes | No | Yes |
+| Revalidate on focus / interval | No | Yes |
+| Requires Axios | Yes (client with `request`) | Usually `fetch` or pluggable clients |
+
+You can use both: a query library for cache and lifecycle, and RequestManager underneath an Axios-based API module when multiple non-query call sites still risk duplicate in-flight requests. Do not expect RequestManager alone to replace a query library.
 
 ---
 
