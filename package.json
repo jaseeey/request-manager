@@ -1,6 +1,6 @@
 {
     "name": "@jaseeey/request-manager",
-    "version": "2.1.4",
+    "version": "2.2.0",
     "description": "De-duplicate concurrent Axios HTTP requests so independent callers share one in-flight promise and response",
     "keywords": [
         "axios",
