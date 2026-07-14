@@ -39,7 +39,7 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 **Usually not the right tool**
 
 - You need response **caching** after the request has finished (this library only de-duplicates **in-flight** requests).
-- You need keys based on **body, headers, or query objects** rather than the full URL string (see [Known limitations](#known-limitations)).
+- You need keys based on **body or headers** (params *are* part of the key; bodies are not — see [Known limitations](#known-limitations)).
 - You need automatic retries, offline queues, or GraphQL batching.
 
 ## Related tools
@@ -148,10 +148,13 @@ Each in-flight request is stored under a key built from:
 1. **Axios client instance** (identity, not config equality)
 2. **HTTP method** (compared case-insensitively, e.g. `GET` and `get` match)
 3. **URL string** (exact string match of the `url` argument—not Axios's fully resolved URL)
+4. **`config.params`** (deterministic serialisation; missing/`undefined`/empty params are equivalent)
 
 ```text
-key = `${clientId}:${method.toLowerCase()}:${url}`
+key = `${clientId}:${method.toLowerCase()}:${url}:${stableParams}`
 ```
+
+Object key order in `params` does not matter (`{ a: 1, b: 2 }` matches `{ b: 2, a: 1 }`). Nested plain objects and arrays are included. `URLSearchParams` is supported.
 
 See also [`baseURL` is not part of the key](#baseurl-is-not-part-of-the-key).
 
@@ -166,15 +169,15 @@ Keeping the key only for the HTTP phase avoids deadlocking when `onSuccess` itse
 
 There is **no cache** of completed responses. De-duplication applies only to concurrent in-flight HTTP work, not to success-callback execution time.
 
-### What is not part of the key
+### What is and is not part of the key
 
-These do **not** create separate requests if client, method, and URL string match:
-
-| Input | De-duplicated? | Notes |
-|--------|----------------|--------|
-| Different `data` bodies | Yes (same key) | Body is **not** in the key |
-| Different Axios `config` (headers, timeout, …) | Yes (same key) | Config is **not** in the key |
-| Different query objects passed only via `config.params` | Yes (same key) | Prefer encoding query in the URL string if it should distinguish calls |
+| Input | Same key? | Notes |
+|--------|-----------|--------|
+| Same client, method, URL, and `params` | Yes | Concurrent callers share one Promise |
+| Different `config.params` (different subsets/filters) | No | Separate HTTP requests — correct for different data slices |
+| Missing / `undefined` / `{}` params | Yes (equivalent) | Treated as “no params” |
+| Different `data` bodies | Yes (same key) | Body is **not** in the key (mutations are usually user actions) |
+| Different headers, timeout, signal, etc. | Yes (same key) | Other config is **not** in the key |
 | Same path, different full URL strings | No | `'/users?id=1'` and `'/users?id=2'` are different keys |
 | Different Axios instances | No | Separate clients never share de-duplication |
 | Different methods | No | `GET` and `POST` to the same URL are independent |
@@ -369,17 +372,25 @@ export function fetchCurrentUser() {
 
 Several UI components can call `fetchCurrentUser()` on mount safely; only one HTTP request runs at a time for that key.
 
-### 2. Put distinguishing data in the URL string
+### 2. Distinguish list/filter loads with URL query or `config.params`
 
-Because query params in `config.params` are **not** part of the de-duplication key, encode them in the URL when they should distinguish requests:
+Either style works; both affect identity:
 
 ```typescript
-// Good: different keys
+// Different keys via URL string
 await requestManager.call(api, 'GET', `/items?id=${id}`);
 
-// Risky: same key for all ids if path is identical
+// Different keys via config.params (included in the de-dupe key)
 await requestManager.call(api, 'GET', '/items', undefined, { params: { id } });
+
+// Same params → same key → one in-flight request for concurrent callers
+await Promise.all([
+    requestManager.call(api, 'GET', '/jobs', {}, { params: { includeArchived: false } }),
+    requestManager.call(api, 'GET', '/jobs', {}, { params: { includeArchived: false } })
+]);
 ```
+
+Prefer one convention in a given app (query in the URL **or** `params`) so keys stay predictable. Mixing both for the same logical filter can create two keys that look “the same” to humans but differ in the key string.
 
 ### 3. Avoid accidental de-duplication of different POST bodies
 
@@ -517,9 +528,9 @@ No. It only de-duplicates **in-flight** requests. After a call settles, the next
 
 The de-duplication key ignores `data`. Concurrent `POST`s to the same client, method, and URL string join the first request; later bodies are not sent separately. Use distinct URLs, separate manager instances, or call Axios directly when bodies must not merge. See [Avoid accidental de-duplication of different POST bodies](#3-avoid-accidental-de-duplication-of-different-post-bodies).
 
-### Why didn't `config.params` create separate keys?
+### Do different `config.params` create separate keys?
 
-`config.params` is not part of the key. Encode distinguishing query data in the `url` string (for example `` `/items?id=${id}` ``), or the calls will join. See [Put distinguishing data in the URL string](#2-put-distinguishing-data-in-the-url-string).
+Yes. `config.params` is part of the de-duplication key (stable serialisation). Different filters/subsets produce different keys and separate HTTP requests; identical params still share one in-flight Promise. See [Request key](#request-key).
 
 ### Can I use `fetch` instead of Axios?
 
@@ -558,9 +569,9 @@ After a request completes, a new `call()` hits the network again. Add your own c
 
 Only the first in-flight caller’s `onSuccess` / `onError` execute. Joiners share the processed promise only.
 
-### Key ignores body and config
+### Key ignores body and most config
 
-De-duplication does not consider request bodies, headers, or `config.params`. Design URLs (and manager boundaries) accordingly.
+De-duplication includes `config.params` but not request bodies, headers, timeout, or abort signals. Concurrent mutations with different bodies on the same URL can still share one request unless you isolate them.
 
 ### Exact URL string matching
 
@@ -613,7 +624,7 @@ Accepted trade-offs (key design, first-callback wins, in-flight-only) match that
 
 ## Features summary
 
-- De-duplicates concurrent requests per **Axios instance + method + URL**
+- De-duplicates concurrent requests per **Axios instance + method + URL + `config.params`**
 - Shared promise for all joiners until the request settles
 - Optional `onSuccess` / `onError` hooks (with documented join semantics)
 - Default shared instance **and** constructible isolated managers

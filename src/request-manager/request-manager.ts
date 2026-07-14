@@ -17,8 +17,8 @@ interface RequestPromise {
  */
 export class RequestManager<T = any> {
     /**
-     * A Map to store active requests, with each key being a combination of client instance, URL, and HTTP method and
-     * its corresponding value being the Promise of the ongoing HTTP request.
+     * A Map to store active requests, with each key being a combination of client instance, URL, HTTP method, and
+     * serialised query params, and its corresponding value being the Promise of the ongoing HTTP request.
      */
     activeRequests: Map<RequestKey, RequestPromise> = new Map();
     private clientIds: WeakMap<AxiosInstance, number> = new WeakMap();
@@ -44,7 +44,8 @@ export class RequestManager<T = any> {
     /**
      * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration.
      *
-     * Requests are de-duplicated only when they target the same client instance, method, and URL.
+     * Requests are de-duplicated when they target the same client instance, method, URL, and `config.params`.
+     * Request bodies and other config fields (headers, timeout, signal, etc.) are not part of the key.
      * If `onSuccess` returns a non-`undefined` value, that value becomes the resolved result.
      *
      * @param client Axios client used to execute the request.
@@ -72,7 +73,7 @@ export class RequestManager<T = any> {
         }
         data ??= {};
         config ??= {};
-        const key = this.buildRequestKey(client, method, url);
+        const key = this.buildRequestKey(client, method, url, config.params);
         if (this.activeRequests.has(key)) {
             return this.activeRequests.get(key)!.processed as Promise<AxiosResponse<TResponse> | TSuccess | void>;
         }
@@ -113,14 +114,69 @@ export class RequestManager<T = any> {
 
     /**
      * Creates a stable in-memory key for de-duplication within this manager instance.
+     *
+     * @param client Axios client instance used for the request.
+     * @param method HTTP method.
+     * @param url Request URL string as passed to `call`.
+     * @param params Axios `config.params` value, if any.
+     * @returns A stable key string for the active-request map.
      */
-    private buildRequestKey(client: AxiosInstance, method: Method, url: string): RequestKey {
+    private buildRequestKey(
+        client: AxiosInstance,
+        method: Method,
+        url: string,
+        params: AxiosRequestConfig['params']
+    ): RequestKey {
         let clientId = this.clientIds.get(client);
         if (!clientId) {
             clientId = this.nextClientId++;
             this.clientIds.set(client, clientId);
         }
-        return `${clientId}:${method.toLowerCase()}:${url}`;
+        return `${clientId}:${method.toLowerCase()}:${url}:${this.serializeParams(params)}`;
+    }
+
+    /**
+     * Serialises query params into a deterministic string for request keys.
+     *
+     * @param params Axios params value (`undefined`, plain object, array, or `URLSearchParams`).
+     * @returns A stable serialisation, or an empty string when params are absent.
+     */
+    private serializeParams(params: AxiosRequestConfig['params']): string {
+        if (params == null) {
+            return '';
+        }
+        if (typeof URLSearchParams !== 'undefined' && params instanceof URLSearchParams) {
+            if ([ ...params.keys() ].length === 0) {
+                return '';
+            }
+            const asObject: Record<string, string[]> = {};
+            for (const key of [ ...params.keys() ].sort()) {
+                asObject[key] = params.getAll(key);
+            }
+            return this.stableStringify(asObject);
+        }
+        if (typeof params === 'object' && !Array.isArray(params) && Object.keys(params).length === 0) {
+            return '';
+        }
+        return this.stableStringify(params);
+    }
+
+    /**
+     * JSON-like serialisation with sorted object keys so param order does not affect identity.
+     *
+     * @param value Value to serialise.
+     * @returns Deterministic string form of `value`.
+     */
+    private stableStringify(value: unknown): string {
+        if (value === null || typeof value !== 'object') {
+            return JSON.stringify(value);
+        }
+        if (Array.isArray(value)) {
+            return `[${value.map(entry => this.stableStringify(entry)).join(',')}]`;
+        }
+        const record = value as Record<string, unknown>;
+        const keys = Object.keys(record).sort();
+        return `{${keys.map(key => `${JSON.stringify(key)}:${this.stableStringify(record[key])}`).join(',')}}`;
     }
 }
 

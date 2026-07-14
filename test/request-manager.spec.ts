@@ -162,10 +162,64 @@ describe('RequestManager', () => {
             expect(firstResponse).toBe(secondResponse);
         });
 
-        test('deduplicates concurrent requests with different config.params on the same URL', async () => {
+        test('does not deduplicate concurrent requests with different config.params', async () => {
             const [ firstResponse, secondResponse ] = await Promise.all([
                 requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { id: 1 } }),
                 requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { id: 2 } })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(2);
+            expect(firstResponse).toBe(mockResponse1);
+            expect(secondResponse).toBe(mockResponse1);
+        });
+
+        test('deduplicates concurrent requests with identical config.params', async () => {
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { id: 1, sort: 'asc' } }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { id: 1, sort: 'asc' } })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('treats config.params with different key order as the same request', async () => {
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { a: 1, b: 2 } }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: { b: 2, a: 1 } })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('treats missing, undefined, and empty params as the same key', async () => {
+            const [ firstResponse, secondResponse, thirdResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: undefined }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: {} })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+            expect(firstResponse).toBe(thirdResponse);
+        });
+
+        test('deduplicates URLSearchParams with the same entries', async () => {
+            const firstParams = new URLSearchParams();
+            firstParams.append('tag', 'a');
+            firstParams.append('tag', 'b');
+            const secondParams = new URLSearchParams();
+            secondParams.append('tag', 'a');
+            secondParams.append('tag', 'b');
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: firstParams }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: secondParams })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('treats empty URLSearchParams like missing params', async () => {
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: new URLSearchParams() })
             ]);
             expect(requestSpy).toHaveBeenCalledTimes(1);
             expect(firstResponse).toBe(secondResponse);
