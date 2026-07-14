@@ -420,6 +420,31 @@ describe('RequestManager', () => {
             expect(requestSpy).not.toHaveBeenCalled();
         });
 
+        test('starts a new request if activeRequests is cleared mid-flight', async () => {
+            let resolveFirst!: (value: AxiosResponse<string>) => void;
+            let callCount = 0;
+            requestSpy.mockImplementation(
+                () => {
+                    callCount += 1;
+                    if (callCount === 1) {
+                        return new Promise<AxiosResponse<string>>(resolve => {
+                            resolveFirst = resolve;
+                        });
+                    }
+                    return Promise.resolve(mockResponse2);
+                }
+            );
+            const firstPromise = requestManager.call(mockClient, 'GET', mockURL1);
+            expect(requestManager.activeRequests.size).toBe(1);
+            requestManager.activeRequests.clear();
+            const secondPromise = requestManager.call(mockClient, 'GET', mockURL1);
+            expect(firstPromise).not.toBe(secondPromise);
+            expect(callCount).toBe(2);
+            resolveFirst(mockResponse1);
+            await expect(firstPromise).resolves.toBe(mockResponse1);
+            await expect(secondPromise).resolves.toBe(mockResponse2);
+        });
+
         test('removes the request from activeRequests after success', async () => {
             expect(requestManager.activeRequests.size).toBe(0);
             const pending = requestManager.call(mockClient, 'GET', mockURL1);

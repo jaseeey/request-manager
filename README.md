@@ -319,7 +319,7 @@ await RequestManager.call(client, 'GET', 'https://example.com/health');
 |--------|-------------|
 | `activeRequests` | `Map` of in-flight entries. Public for inspection/testing. Keys are internal strings; prefer not to depend on key format in production code. |
 
-Clearing the map mid-flight is not recommended except in tests.
+Clearing the map mid-flight is not recommended except in tests. If you clear an in-flight key, a later `call()` with the same client/method/URL will start a **new** HTTP request while the original promise may still settle independently.
 
 ### Constructor
 
