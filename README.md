@@ -158,11 +158,13 @@ See also [`baseURL` is not part of the key](#baseurl-is-not-part-of-the-key).
 ### Lifecycle
 
 1. First `call()` for a key creates the Axios request and stores its promise.
-2. Further `call()`s with the same key **while the request is still in flight** return the **existing processed promise**.
-3. When the request settles (success or failure), the key is removed from the active map.
-4. A later `call()` with the same key starts a **new** network request.
+2. Further `call()`s with the same key **while the HTTP request is still in flight** return the **existing processed promise**.
+3. When the **HTTP request** settles (success or failure), the key is removed from the active map. This happens before `onSuccess` finishes if that callback is async or slow.
+4. A later `call()` with the same key—including one made from inside `onSuccess` after the HTTP response arrived—starts a **new** network request.
 
-There is **no cache** of completed responses. De-duplication applies only to concurrent in-flight work.
+Keeping the key only for the HTTP phase avoids deadlocking when `onSuccess` itself issues another same-key `call()` (joining the still-running processed promise would wait forever).
+
+There is **no cache** of completed responses. De-duplication applies only to concurrent in-flight HTTP work, not to success-callback execution time.
 
 ### What is not part of the key
 

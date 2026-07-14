@@ -352,6 +352,39 @@ describe('RequestManager', () => {
             expect(onErrorCb).toHaveBeenCalledWith(networkError);
         });
 
+        test('allows a new same-key request while onSuccess is still running', async () => {
+            let resolveRequest!: (value: AxiosResponse<string>) => void;
+            let callCount = 0;
+            requestSpy.mockImplementation(
+                () => {
+                    callCount += 1;
+                    if (callCount === 1) {
+                        return new Promise<AxiosResponse<string>>(resolve => {
+                            resolveRequest = resolve;
+                        });
+                    }
+                    return Promise.resolve(mockResponse2);
+                }
+            );
+            let nestedResult: AxiosResponse<string> | undefined;
+            const outerPromise = requestManager.call(
+                mockClient,
+                'GET',
+                mockURL1,
+                {},
+                {},
+                async () => {
+                    expect(requestManager.activeRequests.size).toBe(0);
+                    nestedResult = await requestManager.call(mockClient, 'GET', mockURL1) as AxiosResponse<string>;
+                    return 'outer-done';
+                }
+            );
+            resolveRequest(mockResponse1);
+            await expect(outerPromise).resolves.toBe('outer-done');
+            expect(callCount).toBe(2);
+            expect(nestedResult).toBe(mockResponse2);
+        });
+
         test('removes the request from activeRequests after success', async () => {
             expect(requestManager.activeRequests.size).toBe(0);
             const pending = requestManager.call(mockClient, 'GET', mockURL1);
