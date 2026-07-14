@@ -61,5 +61,25 @@ jobs:
       - name: Verify package contents
         run: npm pack --dry-run
 
+      - name: Check whether version is already published
+        id: npm_version
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if npm view "@jaseeey/request-manager@$version" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Package version $version is already on the npm registry."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Package version $version is not published yet."
+          fi
+
       - name: Publish package
-        run: npm publish --access public
+        if: steps.npm_version.outputs.exists != 'true'
+        run: npm publish --access public --provenance
+
+      - name: Skip publish for existing version
+        if: steps.npm_version.outputs.exists == 'true'
+        run: |
+          echo "Skipping npm publish because @jaseeey/request-manager@${{ steps.npm_version.outputs.version }} is already published."

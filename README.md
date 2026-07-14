@@ -1,128 +1,517 @@
 # RequestManager
 
-RequestManager is a TypeScript-based library designed to manage and regulate HTTP requests efficiently. It ensures that multiple requests to the same URL with the same method are not made concurrently, thus preventing duplicate requests. When a request to a specific URL and method is in progress, subsequent requests to the same URL and method will return the same promise.
+`@jaseeey/request-manager` is a small TypeScript library that **de-duplicates concurrent HTTP requests** made through [Axios](https://axios-http.com/).
 
-## Background and Scope
+If several parts of your application call the same endpoint at the same time (same Axios client instance, method, and URL), only **one** network request is made. Every caller receives the **same shared promise** and resolves or rejects together.
 
-The RequestManager library was specifically written to address a particular issue encountered in my projects. It was not designed or intended to serve as a comprehensive request management solution. Instead, its primary aim is to tackle the specific challenges I faced, offering a targeted approach to prevent duplicate requests and manage HTTP calls more efficiently.
+It is intentionally focused: not a full HTTP client, cache layer, or request queue. Use it when concurrent duplicate in-flight calls are the problem you need to solve.
 
-Given its focused nature, there are a set of known limitations that have been accepted, as these constraints do not affect the scenarios for which the library was developed. While the library provides a solution to the identified issues, its functionality may not cover all use cases or requirements that might be expected from a full-fledged request manager.
+---
 
-Users are encouraged to understand these known limitations and consider how they align with their specific needs before integrating the library into their projects.
+## Table of contents
 
-Should you wish to extend the behaviour, or modify it for your own purposes, then you are free to do so.
+- [When to use it](#when-to-use-it)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [How de-duplication works](#how-de-duplication-works)
+- [Choosing a manager instance](#choosing-a-manager-instance)
+- [API reference](#api-reference)
+- [Effective usage patterns](#effective-usage-patterns)
+- [TypeScript tips](#typescript-tips)
+- [CommonJS](#commonjs)
+- [Known limitations](#known-limitations)
+- [Background and scope](#background-and-scope)
+- [Contributing](#contributing)
+- [License](#license)
 
-## Features
+---
 
-- Prevents duplicate simultaneous requests to the same client instance, URL, and method.
-- Supports TypeScript for improved type safety and developer experience.
-- Allows for optional onSuccess and onError callbacks to handle responses.
-- Generates both CommonJS (CJS) and ECMAScript Module (ESM) distributions for broad compatibility.
+## When to use it
+
+**Good fit**
+
+- Multiple components mount at once and each load the same resource (`GET /users/me`, `GET /config`, …).
+- A user double-clicks a button and you want a single in-flight `POST`/`PUT` until it finishes.
+- You already use Axios (or an Axios-compatible `request()` surface) and want de-duplication without rewriting your client.
+
+**Usually not the right tool**
+
+- You need response **caching** after the request has finished (this library only de-duplicates **in-flight** requests).
+- You need keys based on **body, headers, or query objects** rather than the full URL string (see [Known limitations](#known-limitations)).
+- You need automatic retries, offline queues, or GraphQL batching.
+
+---
 
 ## Installation
-
-To install RequestManager, use the following npm command:
 
 ```bash
 npm install @jaseeey/request-manager
 ```
 
-## Usage
+Peer-style dependency: you must have **Axios** available in your project. Install it if you do not already:
 
-Here's a basic example of how to use the RequestManager library:
-
-### Recommended: Default Instance
-
-```javascript
-import requestManager from '@jaseeey/request-manager';
-
-const client = axios.create();
-const url = 'https://example.com';
-const method = 'GET';
-
-const response = await requestManager.call(client, method, url);
+```bash
+npm install axios
 ```
 
-### With Callbacks and Transforming Success Result
+Requires **Node.js 18+** for development tooling; the published package is plain ESM/CJS JavaScript for bundlers and Node.
 
-```javascript
+---
+
+## Quick start
+
+### ESM (recommended)
+
+```typescript
+import axios from 'axios';
 import requestManager from '@jaseeey/request-manager';
 
-const client = axios.create();
-const url = 'https://example.com';
+const client = axios.create({
+    baseURL: 'https://api.example.com',
+    timeout: 10_000
+});
+
+// Only one HTTP request is sent; both callers share the result.
+const [a, b] = await Promise.all([
+    requestManager.call(client, 'GET', '/users/me'),
+    requestManager.call(client, 'GET', '/users/me')
+]);
+
+console.log(a === b); // true (same resolved value / same shared completion)
+```
+
+### Return response data only
+
+```typescript
+import axios from 'axios';
+import requestManager from '@jaseeey/request-manager';
+
+const client = axios.create({ baseURL: 'https://api.example.com' });
+
+const user = await requestManager.call(
+    client,
+    'GET',
+    '/users/me',
+    undefined,
+    undefined,
+    (response) => response.data // non-undefined return becomes the promise result
+);
+```
+
+### Handle errors without throwing
+
+```typescript
+import axios from 'axios';
+import requestManager from '@jaseeey/request-manager';
+
+const client = axios.create({ baseURL: 'https://api.example.com' });
 
 const result = await requestManager.call(
     client,
     'GET',
-    url,
-    {},
-    {},
-    res => res.data, // Returning a value changes the resolved result
-    err => {
-        // Handle your error here
+    '/users/me',
+    undefined,
+    undefined,
+    undefined,
+    (error) => {
+        console.error('Load failed', error);
+        // Promise resolves to undefined instead of rejecting
     }
 );
 ```
 
-### Creating Isolated Managers
+---
 
-```javascript
+## How de-duplication works
+
+### Request key
+
+Each in-flight request is stored under a key built from:
+
+1. **Axios client instance** (identity, not config equality)
+2. **HTTP method** (compared case-insensitively, e.g. `GET` and `get` match)
+3. **URL string** (exact string match)
+
+```text
+key = `${clientId}:${method.toLowerCase()}:${url}`
+```
+
+### Lifecycle
+
+1. First `call()` for a key creates the Axios request and stores its promise.
+2. Further `call()`s with the same key **while the request is still in flight** return the **existing processed promise**.
+3. When the request settles (success or failure), the key is removed from the active map.
+4. A later `call()` with the same key starts a **new** network request.
+
+There is **no cache** of completed responses. De-duplication applies only to concurrent in-flight work.
+
+### What is not part of the key
+
+These do **not** create separate requests if client, method, and URL string match:
+
+| Input | De-duplicated? | Notes |
+|--------|----------------|--------|
+| Different `data` bodies | Yes (same key) | Body is **not** in the key |
+| Different Axios `config` (headers, timeout, …) | Yes (same key) | Config is **not** in the key |
+| Different query objects passed only via `config.params` | Yes (same key) | Prefer encoding query in the URL string if it should distinguish calls |
+| Same path, different full URL strings | No | `'/users?id=1'` and `'/users?id=2'` are different keys |
+| Different Axios instances | No | Separate clients never share de-duplication |
+| Different methods | No | `GET` and `POST` to the same URL are independent |
+
+### Shared promise and callbacks
+
+When a second caller joins an in-flight request:
+
+- It receives the **same** processed promise as the first caller.
+- Only the **first** caller’s `onSuccess` / `onError` run for that network attempt.
+- Callbacks passed by later callers are **ignored** for that in-flight request.
+
+If you need per-caller side effects, prefer:
+
+```typescript
+const response = await requestManager.call(client, 'GET', url);
+// each caller runs its own logic after await
+updateUi(response.data);
+```
+
+---
+
+## Choosing a manager instance
+
+### Default shared instance (most apps)
+
+```typescript
+import requestManager from '@jaseeey/request-manager';
+```
+
+Use this when you want app-wide de-duplication for a given Axios client and endpoint. This is the recommended default.
+
+### Isolated managers
+
+```typescript
+import { RequestManager } from '@jaseeey/request-manager';
+
+const billingRequests = new RequestManager();
+const adminRequests = new RequestManager();
+```
+
+Each instance has its **own** active-request map. The same client/method/URL can run in parallel across different manager instances.
+
+Use isolated managers when:
+
+- You need separate de-duplication domains (e.g. multi-tenant tabs, micro-frontends).
+- Tests should not share state with the default singleton (or clear `activeRequests` carefully).
+
+### Legacy static API
+
+```typescript
+import axios from 'axios';
 import { RequestManager } from '@jaseeey/request-manager';
 
 const client = axios.create();
-const scopedRequestManager = new RequestManager();
-
-const response = await scopedRequestManager.call(client, 'GET', 'https://example.com');
+await RequestManager.call(client, 'GET', 'https://example.com/health');
 ```
 
-### Legacy Static API (Backward Compatibility)
+`RequestManager.call(...)` is a **deprecated** compatibility helper. It always delegates to the **default shared instance**, not to `new RequestManager()`. Prefer the default export.
+
+---
+
+## API reference
+
+### Imports
+
+| Import | Description |
+|--------|-------------|
+| `import requestManager from '@jaseeey/request-manager'` | Default shared instance |
+| `import { RequestManager } from '@jaseeey/request-manager'` | Class for new instances / static legacy API |
+| `import requestManager, { RequestManager } from '@jaseeey/request-manager'` | Both |
+| `import … from '@jaseeey/request-manager/request-manager'` | Subpath export of the same surface |
+
+### `requestManager.call(client, method, url, data?, config?, onSuccess?, onError?)`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `client` | `AxiosInstance` | required | Axios instance used to perform `client.request(...)` |
+| `method` | `Method` | required | HTTP method (`'GET'`, `'POST'`, …) |
+| `url` | `string` | required | Request URL (relative or absolute, as Axios expects) |
+| `data` | `any` | `{}` | Request body (also used when `null`/`undefined` is passed → coerced to `{}`) |
+| `config` | `AxiosRequestConfig \| null` | `{}` | Extra Axios config merged into the request (`null`/`undefined` → `{}`) |
+| `onSuccess` | `((response) => T \| Promise<T \| undefined>) \| null` | — | Optional success hook; see below |
+| `onError` | `((error) => void) \| null` | — | Optional error hook; see below |
+
+**Return value**
+
+- With no `onSuccess` (or `onSuccess` returns `undefined`): resolves to the full `AxiosResponse`.
+- If `onSuccess` returns a value other than `undefined`: resolves to that value (may be async).
+- If the request fails and `onError` is provided: `onError` is invoked and the promise **resolves to `undefined`** (does not rethrow).
+- If the request fails and `onError` is omitted: the promise **rejects** with the error.
+
+**Notes**
+
+- `onSuccess` may return a `Promise`; it is awaited.
+- `onError` is not awaited; keep it synchronous or fire-and-forget async work carefully.
+- Method matching for de-duplication is case-insensitive.
+
+### Instance fields
+
+| Member | Description |
+|--------|-------------|
+| `activeRequests` | `Map` of in-flight entries. Public for inspection/testing. Keys are internal strings; prefer not to depend on key format in production code. |
+
+Clearing the map mid-flight is not recommended except in tests.
+
+### Constructor
+
+```typescript
+const manager = new RequestManager();
+```
+
+Creates an isolated manager. The generic type parameter on the class is historical; prefer generics on `call()` for response typing.
+
+---
+
+## Effective usage patterns
+
+### 1. Central Axios client + default manager
+
+```typescript
+// api/client.ts
+import axios from 'axios';
+
+export const api = axios.create({
+    baseURL: import.meta.env.VITE_API_URL,
+    withCredentials: true
+});
+
+api.interceptors.request.use((config) => {
+    // attach auth headers, etc.
+    return config;
+});
+```
+
+```typescript
+// api/users.ts
+import requestManager from '@jaseeey/request-manager';
+import { api } from './client';
+
+export function fetchCurrentUser() {
+    return requestManager.call(
+        api,
+        'GET',
+        '/users/me',
+        undefined,
+        undefined,
+        (res) => res.data
+    );
+}
+```
+
+Several UI components can call `fetchCurrentUser()` on mount safely; only one HTTP request runs at a time for that key.
+
+### 2. Put distinguishing data in the URL string
+
+Because query params in `config.params` are **not** part of the de-duplication key, encode them in the URL when they should distinguish requests:
+
+```typescript
+// Good: different keys
+await requestManager.call(api, 'GET', `/items?id=${id}`);
+
+// Risky: same key for all ids if path is identical
+await requestManager.call(api, 'GET', '/items', undefined, { params: { id } });
+```
+
+### 3. Avoid accidental de-duplication of different POST bodies
+
+Concurrent `POST`s to the same URL with different bodies currently share one request (first body wins for the network call; all callers share that outcome). If that is wrong for your API:
+
+- Use distinct URLs, or
+- Use separate manager instances, or
+- Call Axios directly for those operations.
+
+### 4. Prefer post-await logic over dual callbacks for multi-caller UI
+
+```typescript
+// Preferred when many callers may join one request
+try {
+    const res = await requestManager.call(api, 'GET', '/settings');
+    applySettings(res.data);
+}
+catch (err) {
+    showError(err);
+}
+```
+
+### 5. Double-submit protection
+
+```typescript
+async function saveProfile(payload: Profile) {
+    return requestManager.call(
+        api,
+        'PUT',
+        '/profile',
+        payload,
+        undefined,
+        (res) => res.data
+    );
+}
+
+// Rapid repeated calls while the first is in flight share one PUT.
+await Promise.all([saveProfile(data), saveProfile(data)]);
+```
+
+Remember: body is not in the key—only use this when concurrent calls are intentionally identical or the first body is acceptable for all joiners.
+
+### 6. Testing
+
+```typescript
+import requestManager from '@jaseeey/request-manager';
+
+afterEach(() => {
+    requestManager.activeRequests.clear();
+});
+```
+
+Or construct `new RequestManager()` per test file to avoid shared state.
+
+### 7. Cancellation
+
+This library does not cancel Axios requests. To cancel, pass an `AbortSignal` in `config` as you would with Axios. Joined callers still share the same promise; aborting affects the single underlying request.
+
+```typescript
+const controller = new AbortController();
+
+const promise = requestManager.call(
+    api,
+    'GET',
+    '/slow',
+    undefined,
+    { signal: controller.signal }
+);
+
+controller.abort();
+```
+
+---
+
+## TypeScript tips
+
+```typescript
+import type { AxiosResponse } from 'axios';
+import axios from 'axios';
+import requestManager from '@jaseeey/request-manager';
+
+interface User {
+    id: string;
+    name: string;
+}
+
+const client = axios.create();
+
+// Full AxiosResponse
+const response = await requestManager.call<User>(client, 'GET', '/users/me');
+// response is AxiosResponse<User> when onSuccess is omitted
+
+// Mapped result type via onSuccess return value
+const user = await requestManager.call<User, User>(
+    client,
+    'GET',
+    '/users/me',
+    undefined,
+    undefined,
+    (res: AxiosResponse<User>) => res.data
+);
+```
+
+---
+
+## CommonJS
 
 ```javascript
-import { RequestManager } from '@jaseeey/request-manager';
+const axios = require('axios');
+const requestManager = require('@jaseeey/request-manager').default;
+// or: const { RequestManager } = require('@jaseeey/request-manager');
 
-const response = await RequestManager.call(client, 'GET', 'https://example.com');
+const client = axios.create();
+
+requestManager.call(client, 'GET', 'https://example.com').then((res) => {
+    console.log(res.status);
+});
 ```
 
-`RequestManager.call(...)` is supported for backward compatibility, but the default instance API is recommended.
+Package exports:
 
-## API Reference
+- `require('@jaseeey/request-manager')` → CJS build
+- `import … from '@jaseeey/request-manager'` → ESM build
+- Types resolve from the ESM declaration entry
 
-### `requestManager.call(client, method, url, data, config, onSuccess, onError)`
+---
 
-- `client`: The HTTP client instance used for making requests.
-- `method`: The HTTP method (e.g., 'GET', 'POST').
-- `url`: The URL to which the request is sent.
-- `data` (optional): The data to be sent as the request body.
-- `config` (optional): The configuration options for the request.
-- `onSuccess` (optional): A callback function that is called when the request is successful. Returning a non-`undefined` value from this callback changes the resolved value of the `call()` promise.
-- `onError` (optional): A callback function that is called when the request fails.
+## Known limitations
 
-`RequestManager.call(...)` is also available as a static compatibility API and delegates to the shared default instance.
+### In-flight only (no response cache)
 
-## Known Limitations
+After a request completes, a new `call()` hits the network again. Add your own cache if you need longer-lived memoisation.
 
-### Unified Callback Execution
+### First caller owns callbacks
 
-The RequestManager executes only the `onSuccess` or `onError` callbacks of the first request in the case of identical requests made concurrently. This design choice optimises network and computational resources but may limit individual response handling flexibility. Though, you could simply bypass the use of the callbacks and handle each response independently.
+Only the first in-flight caller’s `onSuccess` / `onError` execute. Joiners share the processed promise only.
 
-### State and Error Handling
+### Key ignores body and config
 
-Given that only the first set of callbacks are executed, managing state updates or performing granular error handling based on different parts of the application's needs could be challenging. This approach assumes a uniform handling strategy for success and error responses.
+De-duplication does not consider request bodies, headers, or `config.params`. Design URLs (and manager boundaries) accordingly.
 
-### Request Differentiation
+### Exact URL string matching
 
-The system identifies duplicate requests based on client instance, URL, and method, but still overlooks differences in headers, query parameters, or POST bodies for otherwise matching requests. Applications requiring differentiation based on those fields may need to extend the key generation logic within the RequestManager.
+`/users` and `/users/` are different keys. Relative URLs are not normalised against `baseURL` for keying—the string you pass is the key segment.
 
-### Lifecycle Management
+### Client identity, not configuration equality
 
-The centralised management of requests might complicate the handling of component lifecycles, such as cancelling requests when components unmount, especially in scenarios where multiple components depend on the outcome of a single request.
+Two `axios.create({ baseURL: 'https://api.example.com' })` instances are different clients and will not de-duplicate against each other.
 
-### Singleton Design
-The RequestManager is implemented as a singleton, which inherently restricts the creation of multiple instances of the class. This design choice aligns with the library's goal to centrally manage and de-duplicate HTTP requests across the application. While this meets the requirements for which the library was developed, it may pose a limitation for scenarios where multiple, isolated request managers are needed. Users should consider this design aspect when planning to integrate the library into their applications, especially if there's a potential need for managing requests in isolated contexts.
+### Lifecycle / unmount
+
+If multiple components share one in-flight request, unmounting one should not cancel for all unless you coordinate abort signals carefully.
+
+### `onError` is not awaited
+
+Async work inside `onError` is not tracked by the returned promise.
+
+### Default export is shared process-wide
+
+The default `requestManager` is a single module-level instance. Use `new RequestManager()` when you need isolation.
+
+---
+
+## Background and scope
+
+This library was written to solve a concrete problem: concurrent duplicate HTTP calls in application UIs. It is not intended as a general-purpose request framework.
+
+Accepted trade-offs (key design, first-callback wins, in-flight-only) match that goal. If you need different behaviour, fork or wrap the class—`RequestManager` is small and MIT-licensed.
+
+---
+
+## Features summary
+
+- De-duplicates concurrent requests per **Axios instance + method + URL**
+- Shared promise for all joiners until the request settles
+- Optional `onSuccess` / `onError` hooks (with documented join semantics)
+- Default shared instance **and** constructible isolated managers
+- TypeScript types, ESM + CJS builds
+- Legacy `RequestManager.call` static helper (deprecated)
+
+---
 
 ## Contributing
 
-Contributions to the RequestManager library are welcome. If you have suggestions or improvements, feel free to fork the repository and submit a pull request.
+Contributions are welcome. Fork the repository, open a pull request, and keep changes focused. Run tests with:
+
+```bash
+npm ci
+npm test
+npm run build
+```
+
+---
 
 ## License
 
