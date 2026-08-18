@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2.2.1] - 2026-08-18
+
+### Changed
+
+- Upgraded transitive PostCSS to 8.5.26 and nanoid to 3.3.18 to resolve the latest Dependabot security alerts.
+
 ## [2.2.0] - 2026-07-14
 
 ### Fixed
