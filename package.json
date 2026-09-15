@@ -57,7 +57,7 @@
     },
     "devDependencies": {
         "@vitest/coverage-v8": "^4.1.11",
-        "axios": "^1.18.1",
+        "axios": "^1.20.0",
         "typescript": "^5.9.3",
         "vitest": "^4.1.11"
     }
