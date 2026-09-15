@@ -56,9 +56,9 @@
         "axios": ">=1"
     },
     "devDependencies": {
-        "@vitest/coverage-v8": "^4.1.10",
+        "@vitest/coverage-v8": "^4.1.11",
         "axios": "^1.18.1",
         "typescript": "^5.9.3",
-        "vitest": "^4.1.10"
+        "vitest": "^4.1.11"
     }
 }
