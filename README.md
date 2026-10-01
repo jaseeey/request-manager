@@ -168,7 +168,8 @@ for (const [hash, entry] of requestManager.activeRequests) {
     entry.identity.method;         // e.g. 'get'
     entry.identity.url;
     entry.identity.params;         // as supplied (or null)
-    entry.identity.paramsSerialised;
+    entry.identity.paramsSerialized;
+    entry.identity.paramsSerialised;   // deprecated alias of `paramsSerialized`
     entry.original;                // underlying Axios promise
     entry.processed;               // shared caller promise
 }

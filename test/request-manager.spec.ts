@@ -100,7 +100,8 @@ describe('RequestManager', () => {
             expect(entry.identity.method).toBe('get');
             expect(entry.identity.url).toBe(mockURL1);
             expect(entry.identity.params).toEqual({ sort: 'asc', id: 7 });
-            expect(entry.identity.paramsSerialised).toContain('"id"');
+            expect(entry.identity.paramsSerialized).toContain('"id"');
+            expect(entry.identity.paramsSerialised).toBe(entry.identity.paramsSerialized);
             expect(entry.original).toBeInstanceOf(Promise);
             expect(entry.processed).toBe(pending);
             resolveRequest(mockResponse1);

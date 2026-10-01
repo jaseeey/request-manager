@@ -13,6 +13,12 @@ export interface RequestIdentity {
     /** URL string as passed to `call`, or resolved against the client's `baseURL` when `resolveBaseURL` is enabled. */
     url: string;
     params: unknown;
+    paramsSerialized: string;
+    /**
+     * Backward-compatible British spelling of `paramsSerialized`.
+     *
+     * @deprecated Use `paramsSerialized` instead; to be removed in a future major release.
+     */
     paramsSerialised: string;
 }
 
@@ -199,13 +205,14 @@ export class RequestManager<T = any> {
         }
         const normalizedMethod = method.toLowerCase();
         const urlKey = this.resolveBaseURL ? this.resolveUrlAgainstBase(url, client) : url;
-        const paramsSerialised = this.serializeParams(params);
+        const paramsSerialized = this.serializeParams(params);
         return {
             clientId,
             method: normalizedMethod,
             url: urlKey,
             params: params ?? null,
-            paramsSerialised
+            paramsSerialized,
+            paramsSerialised: paramsSerialized
         };
     }
 
@@ -242,7 +249,7 @@ export class RequestManager<T = any> {
      * @returns {string} - Lowercase hex SHA-256 digest of the identity string.
      */
     private hashIdentity(identity: RequestIdentity): string {
-        const material = `${identity.clientId}:${identity.method}:${identity.url}:${identity.paramsSerialised}`;
+        const material = `${identity.clientId}:${identity.method}:${identity.url}:${identity.paramsSerialized}`;
         return sha256Hex(material);
     }
 
