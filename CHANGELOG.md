@@ -5,6 +5,7 @@
 ### Changed
 
 - Upgraded Axios to ^1.20.0.
+- Upgraded Vitest and @vitest/coverage-v8 to 4.1.11 to resolve the latest Dependabot security alerts.
 
 ## [2.2.1] - 2026-08-18
 
