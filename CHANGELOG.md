@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2.2.2] - 2026-09-15
+
+### Changed
+
+- Upgraded Axios to ^1.20.0.
+
 ## [2.2.1] - 2026-08-18
 
 ### Changed
