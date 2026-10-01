@@ -23,6 +23,7 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 - [FAQ](#faq)
 - [Known limitations](#known-limitations)
 - [Background and scope](#background-and-scope)
+- [Features summary](#features-summary)
 - [Contributing](#contributing)
 - [License](#license)
 
