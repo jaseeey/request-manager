@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## [2.3.0] - 2026-10-01
+
+### Added
+
+- Opt-in `resolveBaseURL` constructor option that resolves relative URLs against the client's `baseURL` for de-duplication keying, so relative and absolute forms of the same resource share one in-flight request. Disabled by default to preserve historical keying.
+- `RequestIdentity.paramsSerialized` as the preferred identity property; `paramsSerialised` is deprecated but retained as a backward-compatible alias until a future major release.
+- Test coverage for array `config.params` de-duplication and async `onSuccess` rejection.
+
+### Changed
+
+- `call()` now rejects with a clear `TypeError` for an invalid client, `method`, `url`, or non-serialisable `config.params` instead of throwing synchronously, so all invalid-input failures are handled through the returned promise.
+- Upgraded Vitest and @vitest/coverage-v8 to 5.0.3.
+- Upgraded TypeScript to 7.0.2.
+- Constrained the Axios peer dependency from `>=1` to `^1`.
+- Renamed the Vitest config to `.mts` to silence the ESM config-loader warning.
+
+### Documentation
+
+- Corrected the development Node.js requirement in the README to 22.12+; the published package still supports Node.js 18+.
+- Documented the `resolveBaseURL` option in the README and removed the `baseURL` keying limitation note.
+- Added the "Features summary" section to the README table of contents.
+- Added the missing `@returns` JSDoc tag on `call()`.
+- Aligned the JSDoc with the documented `{Type} name - Description` tag style, adding typed parameters and returns.
+
+## [2.2.2] - 2026-09-15
+
+### Changed
+
+- Upgraded Axios to ^1.20.0.
+- Upgraded Vitest and @vitest/coverage-v8 to 4.1.11 to resolve the latest Dependabot security alerts.
+
 ## [2.2.1] - 2026-08-18
 
 ### Changed

@@ -100,7 +100,8 @@ describe('RequestManager', () => {
             expect(entry.identity.method).toBe('get');
             expect(entry.identity.url).toBe(mockURL1);
             expect(entry.identity.params).toEqual({ sort: 'asc', id: 7 });
-            expect(entry.identity.paramsSerialised).toContain('"id"');
+            expect(entry.identity.paramsSerialized).toContain('"id"');
+            expect(entry.identity.paramsSerialised).toBe(entry.identity.paramsSerialized);
             expect(entry.original).toBeInstanceOf(Promise);
             expect(entry.processed).toBe(pending);
             resolveRequest(mockResponse1);
@@ -251,6 +252,23 @@ describe('RequestManager', () => {
             ]);
             expect(requestSpy).toHaveBeenCalledTimes(1);
             expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('deduplicates concurrent requests with identical array params', async () => {
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('does not deduplicate concurrent requests with different array params', async () => {
+            await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'b' ] })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(2);
         });
 
         test('allows a new request after the previous one completes', async () => {
@@ -431,6 +449,17 @@ describe('RequestManager', () => {
             expect(onErrorCb).not.toHaveBeenCalled();
         });
 
+        test('rejects the promise when async onSuccess rejects without invoking onError', async () => {
+            const callbackError = new Error('async onSuccess failed');
+            const onSuccessCb = vi.fn().mockRejectedValue(callbackError);
+            const onErrorCb = vi.fn();
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, {}, onSuccessCb, onErrorCb)
+            ).rejects.toThrow(callbackError);
+            expect(onSuccessCb).toHaveBeenCalledTimes(1);
+            expect(onErrorCb).not.toHaveBeenCalled();
+        });
+
         test('preserves the original error when onError throws', async () => {
             const networkError = new Error('network failed');
             requestSpy.mockRejectedValueOnce(networkError);
@@ -499,6 +528,33 @@ describe('RequestManager', () => {
             await expect(
                 requestManager.call(mockClient, 'GET', null as unknown as string)
             ).rejects.toThrow(/URL string/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects non-object clients with a clear TypeError', async () => {
+            await expect(
+                requestManager.call(null as unknown as AxiosInstance, 'GET', mockURL1)
+            ).rejects.toThrow(TypeError);
+            await expect(
+                requestManager.call(123 as unknown as AxiosInstance, 'GET', mockURL1)
+            ).rejects.toThrow(/Axios client/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects clients without a callable request method', async () => {
+            const bareClient = {} as unknown as AxiosInstance;
+            await expect(
+                requestManager.call(bareClient, 'GET', mockURL1)
+            ).rejects.toThrow(/Axios client/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects config.params with a circular reference', async () => {
+            const circular = {} as Record<string, unknown>;
+            circular.self = circular;
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: circular })
+            ).rejects.toThrow(/serializable config\.params/);
             expect(requestSpy).not.toHaveBeenCalled();
         });
 
@@ -612,6 +668,105 @@ describe('RequestManager', () => {
             const [ firstResult, secondResult ] = await Promise.all([ firstPromise, secondPromise ]);
             expect(firstResult).toBe(mockResponse1);
             expect(secondResult).toBe(mockResponse2);
+        });
+    });
+
+    describe('resolveBaseURL option', () => {
+
+        const baseURL = 'https://api.example.com';
+
+        const createBaseClient = (clientBaseURL?: string) => {
+            const client = clientBaseURL === undefined ? axios.create() : axios.create({ baseURL: clientBaseURL });
+            const spy = vi.spyOn(client, 'request').mockImplementation(
+                <T = any, R = AxiosResponse<T>, D = any>(_config: AxiosRequestConfig<D>): Promise<R> =>
+                    Promise.resolve(mockResponse1 as unknown as R)
+            );
+            return { client, spy };
+        };
+
+        test('de-duplicates a relative URL and its baseURL-resolved absolute form', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                manager.call(client, 'GET', '/users/me'),
+                manager.call(client, 'GET', `${baseURL}/users/me`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('combines a trailing-slash baseURL using Axios join rules', async () => {
+            const { client, spy } = createBaseClient(`${baseURL}/`);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', `${baseURL}/users`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
+
+        test('combines a baseURL with a path using Axios join rules', async () => {
+            const { client, spy } = createBaseClient(`${baseURL}/base`);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', 'users'),
+                manager.call(client, 'GET', `${baseURL}/base/users`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
+
+        test('does not de-duplicate URLs that resolve to different resources', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', `${baseURL}/users/1`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('keeps absolute URLs from other origins separate', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', 'https://other.example.com/users')
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('treats protocol-relative URLs as absolute', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '//cdn.example.com/users'),
+                manager.call(client, 'GET', '/users')
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('leaves relative URLs unchanged when the client has no usable baseURL', async () => {
+            const { client: plainClient, spy: plainSpy } = createBaseClient();
+            const { client: emptyClient, spy: emptySpy } = createBaseClient('');
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(plainClient, 'GET', '/users'),
+                manager.call(plainClient, 'GET', `${baseURL}/users`),
+                manager.call(emptyClient, 'GET', '/users'),
+                manager.call(emptyClient, 'GET', `${baseURL}/users`)
+            ]);
+            expect(plainSpy).toHaveBeenCalledTimes(2);
+            expect(emptySpy).toHaveBeenCalledTimes(2);
+        });
+
+        test('is disabled by default so relative and absolute URLs stay separate', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager();
+            await Promise.all([
+                manager.call(client, 'GET', '/users/me'),
+                manager.call(client, 'GET', `${baseURL}/users/me`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
         });
     });
 });

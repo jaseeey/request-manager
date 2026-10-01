@@ -23,6 +23,7 @@ It is intentionally focused: not a full HTTP client, cache layer, or request que
 - [FAQ](#faq)
 - [Known limitations](#known-limitations)
 - [Background and scope](#background-and-scope)
+- [Features summary](#features-summary)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -65,13 +66,15 @@ You can use both: a query library for cache and lifecycle, and RequestManager un
 npm install @jaseeey/request-manager axios
 ```
 
-**Axios is a peer dependency** (`axios >= 1`). The package does not bundle a client for you; you pass your own `AxiosInstance` into `call()`. Install Axios alongside this library if it is not already in your project:
+**Axios is a peer dependency** (`axios ^1`). The package does not bundle a client for you; you pass your own `AxiosInstance` into `call()`. Install Axios alongside this library if it is not already in your project:
 
 ```bash
 npm install axios
 ```
 
-Requires **Node.js 18+** for development tooling; the published package is plain ESM/CJS JavaScript for bundlers and Node.
+Requires **Node.js 22.12+** for development tooling (running the test suite); the
+published package remains plain ESM/CJS JavaScript that runs on Node.js 18+ in your
+applications.
 
 ---
 
@@ -147,7 +150,7 @@ Each in-flight request is stored under a key built from:
 
 1. **Axios client instance** (identity, not config equality)
 2. **HTTP method** (compared case-insensitively, e.g. `GET` and `get` match)
-3. **URL string** (exact string match of the `url` argument—not Axios's fully resolved URL)
+3. **URL string** (exact string match of the `url` argument—or its `baseURL`-resolved form when `resolveBaseURL` is enabled)
 4. **`config.params`** (deterministic serialisation; missing/`undefined`/empty params are equivalent)
 
 ```text
@@ -165,13 +168,14 @@ for (const [hash, entry] of requestManager.activeRequests) {
     entry.identity.method;         // e.g. 'get'
     entry.identity.url;
     entry.identity.params;         // as supplied (or null)
-    entry.identity.paramsSerialised;
+    entry.identity.paramsSerialized;
+    entry.identity.paramsSerialised;   // deprecated alias of `paramsSerialized`
     entry.original;                // underlying Axios promise
     entry.processed;               // shared caller promise
 }
 ```
 
-See also [`baseURL` is not part of the key](#baseurl-is-not-part-of-the-key).
+By default the raw `url` argument is the key segment; enable [`resolveBaseURL`](#constructor) to key on the `baseURL`-resolved URL instead.
 
 ### Lifecycle
 
@@ -194,6 +198,7 @@ There is **no cache** of completed responses. De-duplication applies only to con
 | Different `data` bodies | Yes (same key) | Body is **not** in the key (mutations are usually user actions) |
 | Different headers, timeout, signal, etc. | Yes (same key) | Other config is **not** in the key |
 | Same path, different full URL strings | No | `'/users?id=1'` and `'/users?id=2'` are different keys |
+| Relative URL and its `baseURL`-resolved absolute form | No (Yes with `resolveBaseURL`) | Opt-in `baseURL`-aware keying |
 | Different Axios instances | No | Separate clients never share de-duplication |
 | Different methods | No | `GET` and `POST` to the same URL are independent |
 
@@ -330,6 +335,9 @@ await RequestManager.call(client, 'GET', 'https://example.com/health');
 - `onSuccess` may return a `Promise`; it is awaited.
 - `onError` is not awaited; keep it synchronous or fire-and-forget async work carefully.
 - Method matching for de-duplication is case-insensitive.
+- `call()` rejects with a `TypeError` when the client is not an Axios-like instance, the
+  `method` or `url` is invalid, or `config.params` is not serialisable (e.g. a circular
+  reference).
 
 ### Instance fields
 
@@ -345,9 +353,16 @@ Clearing the map mid-flight is not recommended except in tests. If you clear an 
 
 ```typescript
 const manager = new RequestManager();
+const resolvedManager = new RequestManager({ resolveBaseURL: true });
 ```
 
 Creates an isolated manager. The generic type parameter on the class is historical; prefer generics on `call()` for response typing.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `resolveBaseURL` | `boolean` | `false` | Resolve relative URLs against the client's `baseURL` before keying, so a relative URL and its absolute form share one in-flight request |
+
+With `resolveBaseURL` enabled, `'/users/me'` on a client created with `baseURL: 'https://api.example.com'` de-duplicates against `'https://api.example.com/users/me'`. Resolution mirrors Axios's own `buildFullPath` rules: absolute and protocol-relative URLs are left untouched, and joining follows the same trailing-slash rules Axios uses.
 
 ---
 
@@ -592,26 +607,7 @@ De-duplication includes `config.params` but not request bodies, headers, timeout
 
 ### Exact URL string matching
 
-`/users` and `/users/` are different keys. Relative URLs are not normalised against `baseURL` for keying—the string you pass is the key segment.
-
-### `baseURL` is not part of the key
-
-Axios may resolve a relative `url` against the client's `baseURL` when sending the request, but RequestManager keys only on the **`url` argument string**.
-
-```typescript
-const client = axios.create({ baseURL: 'https://api.example.com' });
-
-// These share one in-flight request (same url string: '/users/me')
-await Promise.all([
-    requestManager.call(client, 'GET', '/users/me'),
-    requestManager.call(client, 'GET', '/users/me')
-]);
-
-// This is a different key (different url string), even if it hits the same origin
-await requestManager.call(client, 'GET', 'https://api.example.com/users/me');
-```
-
-Keep the `url` argument consistent across call sites (usually the same relative path) so de-duplication works as intended.
+`/users` and `/users/` are different keys. Relative URLs are not normalised against `baseURL` for keying by default—the string you pass is the key segment (enable `resolveBaseURL` for `baseURL`-aware keying).
 
 ### Client identity, not configuration equality
 
@@ -645,6 +641,7 @@ Accepted trade-offs (key design, first-callback wins, in-flight-only) match that
 - Shared promise for all joiners until the request settles
 - Optional `onSuccess` / `onError` hooks (with documented join semantics)
 - Default shared instance **and** constructible isolated managers
+- Opt-in **`baseURL`-aware keying** (`resolveBaseURL`) so relative and absolute URLs for the same resource share one in-flight request
 - TypeScript types, ESM + CJS builds
 - Legacy `RequestManager.call` static helper (deprecated)
 
