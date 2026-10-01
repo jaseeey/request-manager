@@ -10,9 +10,22 @@ type MaybePromise<T> = T | Promise<T>;
 export interface RequestIdentity {
     clientId: number;
     method: string;
+    /** URL string as passed to `call`, or resolved against the client's `baseURL` when `resolveBaseURL` is enabled. */
     url: string;
     params: unknown;
     paramsSerialised: string;
+}
+
+/**
+ * Configuration options for a {@link RequestManager} instance.
+ */
+export interface RequestManagerOptions {
+    /**
+     * When enabled, relative URLs are resolved against the client's `baseURL` before keying,
+     * so the same logical resource de-duplicates whether callers address it relatively or
+     * absolutely. Disabled by default to preserve historical exact-string keying.
+     */
+    resolveBaseURL?: boolean;
 }
 
 /**
@@ -43,6 +56,16 @@ export class RequestManager<T = any> {
     activeRequests: Map<RequestKey, ActiveRequest> = new Map();
     private clientIds: WeakMap<AxiosInstance, number> = new WeakMap();
     private nextClientId = 1;
+    private readonly resolveBaseURL: boolean;
+
+    /**
+     * Creates an isolated manager.
+     *
+     * @param options Optional instance configuration.
+     */
+    constructor(options: RequestManagerOptions = {}) {
+        this.resolveBaseURL = options.resolveBaseURL === true;
+    }
 
     /**
      * Backward-compatible static API that delegates to the shared singleton instance.
@@ -65,6 +88,7 @@ export class RequestManager<T = any> {
      * Executes or retrieves an ongoing HTTP request based on the provided URL, method, payload, and configuration.
      *
      * Requests are de-duplicated when they target the same client instance, method, URL, and `config.params`.
+     * When constructed with `resolveBaseURL`, relative URLs are resolved against the client's `baseURL` for keying.
      * Request bodies and other config fields (headers, timeout, signal, etc.) are not part of the key.
      * If `onSuccess` returns a non-`undefined` value, that value becomes the resolved result.
      *
@@ -172,14 +196,41 @@ export class RequestManager<T = any> {
             this.clientIds.set(client, clientId);
         }
         const normalisedMethod = method.toLowerCase();
+        const urlKey = this.resolveBaseURL ? this.resolveUrlAgainstBase(url, client) : url;
         const paramsSerialised = this.serializeParams(params);
         return {
             clientId,
             method: normalisedMethod,
-            url,
+            url: urlKey,
             params: params ?? null,
             paramsSerialised
         };
+    }
+
+    /**
+     * Resolves a relative URL against the client's `baseURL` for keying, mirroring Axios's
+     * own `buildFullPath` and `combineURLs` semantics.
+     *
+     * @param url Request URL string as passed to `call`.
+     * @param client Axios client whose `defaults.baseURL` is the resolution base.
+     * @returns The URL string used as the key segment.
+     */
+    private resolveUrlAgainstBase(url: string, client: AxiosInstance): string {
+        const baseURL = client.defaults?.baseURL;
+        if (typeof baseURL !== 'string' || baseURL.length === 0 || this.isAbsoluteUrl(url)) {
+            return url;
+        }
+        return baseURL.replace(/\/+$/, '') + '/' + url.replace(/^\/+/, '');
+    }
+
+    /**
+     * Determines whether a URL is absolute, matching Axios's `isAbsoluteURL` check.
+     *
+     * @param url URL string to test.
+     * @returns True when `url` has a scheme or is protocol-relative.
+     */
+    private isAbsoluteUrl(url: string): boolean {
+        return /^([a-z][a-z\d+\-.]*:)?\/\//i.test(url);
     }
 
     /**

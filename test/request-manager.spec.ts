@@ -669,4 +669,103 @@ describe('RequestManager', () => {
             expect(secondResult).toBe(mockResponse2);
         });
     });
+
+    describe('resolveBaseURL option', () => {
+
+        const baseURL = 'https://api.example.com';
+
+        const createBaseClient = (clientBaseURL?: string) => {
+            const client = clientBaseURL === undefined ? axios.create() : axios.create({ baseURL: clientBaseURL });
+            const spy = vi.spyOn(client, 'request').mockImplementation(
+                <T = any, R = AxiosResponse<T>, D = any>(_config: AxiosRequestConfig<D>): Promise<R> =>
+                    Promise.resolve(mockResponse1 as unknown as R)
+            );
+            return { client, spy };
+        };
+
+        test('de-duplicates a relative URL and its baseURL-resolved absolute form', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                manager.call(client, 'GET', '/users/me'),
+                manager.call(client, 'GET', `${baseURL}/users/me`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('combines a trailing-slash baseURL using Axios join rules', async () => {
+            const { client, spy } = createBaseClient(`${baseURL}/`);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', `${baseURL}/users`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
+
+        test('combines a baseURL with a path using Axios join rules', async () => {
+            const { client, spy } = createBaseClient(`${baseURL}/base`);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', 'users'),
+                manager.call(client, 'GET', `${baseURL}/base/users`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
+
+        test('does not de-duplicate URLs that resolve to different resources', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', `${baseURL}/users/1`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('keeps absolute URLs from other origins separate', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '/users'),
+                manager.call(client, 'GET', 'https://other.example.com/users')
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('treats protocol-relative URLs as absolute', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(client, 'GET', '//cdn.example.com/users'),
+                manager.call(client, 'GET', '/users')
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test('leaves relative URLs unchanged when the client has no usable baseURL', async () => {
+            const { client: plainClient, spy: plainSpy } = createBaseClient();
+            const { client: emptyClient, spy: emptySpy } = createBaseClient('');
+            const manager = new RequestManager({ resolveBaseURL: true });
+            await Promise.all([
+                manager.call(plainClient, 'GET', '/users'),
+                manager.call(plainClient, 'GET', `${baseURL}/users`),
+                manager.call(emptyClient, 'GET', '/users'),
+                manager.call(emptyClient, 'GET', `${baseURL}/users`)
+            ]);
+            expect(plainSpy).toHaveBeenCalledTimes(2);
+            expect(emptySpy).toHaveBeenCalledTimes(2);
+        });
+
+        test('is disabled by default so relative and absolute URLs stay separate', async () => {
+            const { client, spy } = createBaseClient(baseURL);
+            const manager = new RequestManager();
+            await Promise.all([
+                manager.call(client, 'GET', '/users/me'),
+                manager.call(client, 'GET', `${baseURL}/users/me`)
+            ]);
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+    });
 });
