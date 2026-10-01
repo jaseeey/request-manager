@@ -75,6 +75,8 @@ export class RequestManager<T = any> {
      * @param config Optional Axios request configuration.
      * @param onSuccess Optional callback invoked on success. Returning a value overrides the resolved response.
      * @param onError Optional callback for request failures only. If it throws, the original request error is rethrown.
+     * @returns {Promise<AxiosResponse<TResponse> | TSuccess | void>} - The shared promise for
+     * the in-flight request.
      * @throws {TypeError} - If the client is not an Axios-like instance, the method or URL is
      * invalid, or config.params is not serializable.
      */
