@@ -448,6 +448,17 @@ describe('RequestManager', () => {
             expect(onErrorCb).not.toHaveBeenCalled();
         });
 
+        test('rejects the promise when async onSuccess rejects without invoking onError', async () => {
+            const callbackError = new Error('async onSuccess failed');
+            const onSuccessCb = vi.fn().mockRejectedValue(callbackError);
+            const onErrorCb = vi.fn();
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, {}, onSuccessCb, onErrorCb)
+            ).rejects.toThrow(callbackError);
+            expect(onSuccessCb).toHaveBeenCalledTimes(1);
+            expect(onErrorCb).not.toHaveBeenCalled();
+        });
+
         test('preserves the original error when onError throws', async () => {
             const networkError = new Error('network failed');
             requestSpy.mockRejectedValueOnce(networkError);
