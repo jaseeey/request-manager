@@ -71,7 +71,9 @@ npm install @jaseeey/request-manager axios
 npm install axios
 ```
 
-Requires **Node.js 18+** for development tooling; the published package is plain ESM/CJS JavaScript for bundlers and Node.
+Requires **Node.js 22.12+** for development tooling (running the test suite); the
+published package remains plain ESM/CJS JavaScript that runs on Node.js 18+ in your
+applications.
 
 ---
 
