@@ -333,6 +333,9 @@ await RequestManager.call(client, 'GET', 'https://example.com/health');
 - `onSuccess` may return a `Promise`; it is awaited.
 - `onError` is not awaited; keep it synchronous or fire-and-forget async work carefully.
 - Method matching for de-duplication is case-insensitive.
+- `call()` rejects with a `TypeError` when the client is not an Axios-like instance, the
+  `method` or `url` is invalid, or `config.params` is not serializable (e.g. a circular
+  reference).
 
 ### Instance fields
 

@@ -502,6 +502,33 @@ describe('RequestManager', () => {
             expect(requestSpy).not.toHaveBeenCalled();
         });
 
+        test('rejects non-object clients with a clear TypeError', async () => {
+            await expect(
+                requestManager.call(null as unknown as AxiosInstance, 'GET', mockURL1)
+            ).rejects.toThrow(TypeError);
+            await expect(
+                requestManager.call(123 as unknown as AxiosInstance, 'GET', mockURL1)
+            ).rejects.toThrow(/Axios client/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects clients without a callable request method', async () => {
+            const bareClient = {} as unknown as AxiosInstance;
+            await expect(
+                requestManager.call(bareClient, 'GET', mockURL1)
+            ).rejects.toThrow(/Axios client/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
+        test('rejects config.params with a circular reference', async () => {
+            const circular = {} as Record<string, unknown>;
+            circular.self = circular;
+            await expect(
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: circular })
+            ).rejects.toThrow(/serializable config\.params/);
+            expect(requestSpy).not.toHaveBeenCalled();
+        });
+
         test('starts a new request if activeRequests is cleared mid-flight', async () => {
             let resolveFirst!: (value: AxiosResponse<string>) => void;
             let callCount = 0;

@@ -75,6 +75,8 @@ export class RequestManager<T = any> {
      * @param config Optional Axios request configuration.
      * @param onSuccess Optional callback invoked on success. Returning a value overrides the resolved response.
      * @param onError Optional callback for request failures only. If it throws, the original request error is rethrown.
+     * @throws {TypeError} - If the client is not an Axios-like instance, the method or URL is
+     * invalid, or config.params is not serializable.
      */
     call<TResponse = T, TSuccess = never>(
         client: AxiosInstance,
@@ -85,6 +87,9 @@ export class RequestManager<T = any> {
         onSuccess?: ((result: AxiosResponse<TResponse>) => MaybePromise<TSuccess | undefined>) | null,
         onError?: ((error: unknown) => void) | null
     ): Promise<AxiosResponse<TResponse> | TSuccess | void> {
+        if (client == null || typeof client.request !== 'function') {
+            return Promise.reject(new TypeError('RequestManager.call requires an Axios client instance'));
+        }
         if (typeof method !== 'string' || method.length === 0) {
             return Promise.reject(new TypeError('RequestManager.call requires a non-empty HTTP method string'));
         }
@@ -93,7 +98,12 @@ export class RequestManager<T = any> {
         }
         data ??= {};
         config ??= {};
-        const identity = this.buildRequestIdentity(client, method, url, config.params);
+        let identity: RequestIdentity;
+        try {
+            identity = this.buildRequestIdentity(client, method, url, config.params);
+        } catch {
+            return Promise.reject(new TypeError('RequestManager.call requires serializable config.params'));
+        }
         const hash = this.hashIdentity(identity);
         const existing = this.activeRequests.get(hash);
         if (existing) {
