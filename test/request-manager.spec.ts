@@ -253,6 +253,23 @@ describe('RequestManager', () => {
             expect(firstResponse).toBe(secondResponse);
         });
 
+        test('deduplicates concurrent requests with identical array params', async () => {
+            const [ firstResponse, secondResponse ] = await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(1);
+            expect(firstResponse).toBe(secondResponse);
+        });
+
+        test('does not deduplicate concurrent requests with different array params', async () => {
+            await Promise.all([
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'a' ] }),
+                requestManager.call(mockClient, 'GET', mockURL1, {}, { params: [ 'tag', 'b' ] })
+            ]);
+            expect(requestSpy).toHaveBeenCalledTimes(2);
+        });
+
         test('allows a new request after the previous one completes', async () => {
             await requestManager.call(mockClient, 'GET', mockURL1);
             requestSpy.mockClear();
