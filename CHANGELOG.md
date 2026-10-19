@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2.3.1] - 2026-10-19
+
+### Changed
+
+- Upgraded Vitest and @vitest/coverage-v8 to 5.0.5.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added
