@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [2.3.2] - 2026-10-27
+
+### Changed
+
+- Updated the transitive development dependency `follow-redirects` to 1.16.2 to address Dependabot security alerts.
+
 ## [2.3.1] - 2026-10-19
 
 ### Changed
