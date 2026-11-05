@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [2.3.3] - 2026-11-06
+
+### Changed
+
+- Upgraded Vitest and @vitest/coverage-v8 to 5.1.0.
+- Upgraded Axios to ^1.21.0.
+
 ## [2.3.2] - 2026-10-27
 
 ### Changed
